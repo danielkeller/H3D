@@ -4,7 +4,6 @@ version:             0.1.0.0
 -- description:         
 homepage:            https://github.com/danielkeller/H3D
 license:             MIT
-license-file:        LICENSE
 author:              Dan Keller
 maintainer:          dbk40@case.edu
 -- copyright:           
@@ -13,6 +12,8 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable H3D
-  -- main-is:             
+  main-is:             Main.hs
+  hs-source-dirs:      src, api
+  ghc-options:         -O2 -Wall
   -- other-modules:       
-  build-depends:       base > 3 && < 5
+  build-depends:       base > 3 && < 5, GLFW-b, OpenGL
