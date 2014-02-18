@@ -15,5 +15,7 @@ executable H3D
   main-is:             Main.hs
   hs-source-dirs:      src, api
   ghc-options:         -O2 -Wall
-  -- other-modules:       
-  build-depends:       base > 3 && < 5, GLFW-b, OpenGL
+  -- other-modules:      
+  build-depends:       base > 3 && < 5, GLFW-b, OpenGL >= 2.9.1, linear, vinyl, vinyl-gl,
+                       vector, attoparsec, bytestring, GLUtil
+  extra-libraries:     OpenGL32
