@@ -14,7 +14,7 @@ import Graphics.VinylGL
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
 import Foreign.C.Types(CFloat(..))
-import Linear (V4(..))
+import Linear
 
 import GHC.Float (double2Float)
 import Data.Either (lefts, rights)
@@ -31,7 +31,8 @@ data Object = Object { objVAO :: GL.VertexArrayObject
 drawObject :: Object -> IO ()
 drawObject Object {objVAO = vao, objNumIndices = inds, objShader = shdr} =
     withVAO vao $ do
-        --GL.currentProgram $= Just (program shdr)
+        GL.currentProgram $= Just (program shdr)
+        setUniforms shdr (modelView =: mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0))
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
 
@@ -41,10 +42,13 @@ pos = Field
 tex :: "tex" ::: GL.GLint
 tex = Field
 
+modelView :: "modelView" ::: M44 GL.GLfloat
+modelView = Field
+
 loadObject :: FilePath -> IO Object
 loadObject file = do
-    --(verts, faces) <- unEither . parseOnly parseObj <$> B.readFile file
-    let (verts, faces) = (map (pos =:) [V4 1 0 0 1, V4 1 1 0 1, V4 0 1 0 1], V.fromList [0,1,2])
+    (verts, faces) <- unEither . parseOnly parseObj <$> B.readFile file
+    --let (verts, faces) = (map (pos =:) [V4 1 0 0 1, V4 1 1 0 1, V4 0 1 0 1], V.fromList [0,1,2])
     vertBuf <- bufferVertices verts
     indBuf <- bufferIndices faces
     shdr <- simpleShaderProgram "simple.vert" "simple.frag"
@@ -62,18 +66,18 @@ loadObject file = do
                   }
     where unEither (Left err) = error err
           unEither (Right res) = res
-{-
+
 --parseObj :: Parser (V.Vector (V4 Float), V.Vector GL.GLint)
 parseObj = do res <- many $ ((Left <$> parseVert) <|> (Right <$> parseFace))
               return (V.fromList (lefts res), V.concat (rights res))
 
 --parseFace :: Parser (V.Vector GL.GLint)
 parseFace = "f " .*> thenDec <*> (thenDec <*> (thenDec <*> return V.empty))
-    where thenDec = (V.cons <$> decimal) <* skipSpace
+    where thenDec = (V.cons . (subtract 1) <$> decimal) <* skipSpace
 
 --parseVert :: Parser (PlainRec (V4 Float))
 parseVert = "v " .*> ((pos =:) <$> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1))
     where thenFloat = CFloat . double2Float <$> (double <* skipSpace)
--}
+
 vertPosnAttrib :: GL.AttribLocation
 vertPosnAttrib = GL.AttribLocation 0
