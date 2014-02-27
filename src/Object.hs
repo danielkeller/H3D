@@ -8,6 +8,8 @@ module Object (
     drawObject,
 ) where
 
+import Prelude hiding ((.))
+
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
@@ -24,26 +26,31 @@ import Data.Attoparsec.ByteString.Char8
 import qualified Data.ByteString.Char8 as B
 import Control.Applicative
 
+import Control.Wire
+
 data Object = Object { objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
                      , freeObject :: IO ()
                      , objShader :: ShaderProgram
                      }
 
-type Drawable = '["object" ::: Object, "transform" ::: M44 GL.GLfloat]
-objXfrm :: "transform" ::: M44 GL.GLfloat
+type FXfrm = "transform" ::: M44 GL.GLfloat
+type FObject = "object" ::: Object
+objXfrm :: FXfrm
 objXfrm = Field
-objRec :: "object" ::: Object
+objRec :: FObject
 objRec = Field
 
---drawObject :: (Drawable `ISubset` a) => M44 GL.GLfloat -> PlainRec a -> IO ()
-drawObject camera obj =
-    withVAO vao $ do
+drawObject :: (FXfrm `IElem` a, FObject `IElem` a) =>
+              Wire s e IO (M44 GL.GLfloat, PlainRec a) ()
+drawObject = mkGen_ $ \(camera, obj) ->
+    let Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec obj
+    in withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
         setUniforms shdr (modelView =: (rGet objXfrm obj !*! camera))
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
-    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec obj
+        return (Right ())
 
 pos :: "position" ::: V4 GL.GLfloat
 pos = Field

@@ -3,9 +3,12 @@ module Main (
 	main
 ) where
 
+import Prelude hiding ((.))
+
 import qualified Graphics.UI.GLFW as GLFW
 import Linear
 import Data.Vinyl
+import Control.Wire hiding ((<+>))
 
 import Window
 import Object
@@ -19,8 +22,9 @@ main :: IO ()
 main = withWindow setup action cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
                          loadObject "teapot.obj"
-          action _ teapot = drawObject (mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0)) $
-                                objRec =: teapot <+> objXfrm =: eye4
+          action _ teapot = drawObject . pure
+                                (mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0)
+                                ,objRec =: teapot <+> objXfrm =: eye4)
           cleanup teapot = freeObject teapot
 --for another day
 {-
