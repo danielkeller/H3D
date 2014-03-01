@@ -10,6 +10,9 @@ import Control.Wire hiding (when, (.), unless)
 
 import Util
 
+resizeCB :: WindowSizeCallback
+resizeCB _ w h = GL.viewport GL.$= (GL.Position 0 0, GL.Size (fromIntegral w) (fromIntegral h))
+
 withWindow :: (Window -> IO a)
                -> (Window -> a -> PlainWire b)
                -> (a -> IO ()) -> IO ()
@@ -26,6 +29,7 @@ withWindow setup action cleanup =
                  case w of
                      Nothing -> return ()
                      Just wnd -> do makeContextCurrent w
+                                    setWindowSizeCallback wnd (Just resizeCB)
                                     bracket (setup wnd) cleanup (mainLoop wnd clockSession_ . action wnd)
                                  `finally` destroyWindow wnd
           mainLoop wnd s wire = do
