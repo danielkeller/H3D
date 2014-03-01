@@ -1,8 +1,9 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts, Arrows #-}
 module Object (
     Object(),
     objRec,
     objXfrm,
+    camera,
     freeObject,
     loadObject,
     drawObject,
@@ -28,29 +29,37 @@ import Control.Applicative
 
 import Control.Wire
 
+import Util
+
 data Object = Object { objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
                      , freeObject :: IO ()
                      , objShader :: ShaderProgram
                      }
 
-type FXfrm = "transform" ::: M44 GL.GLfloat
+--it appears that record types have to be monomorphic
+type FXfrm = "transform" ::: PlainWire (M44 GL.GLfloat)
 type FObject = "object" ::: Object
+type FCamera = "camera" ::: PlainWire (M44 GL.GLfloat)
 objXfrm :: FXfrm
 objXfrm = Field
 objRec :: FObject
 objRec = Field
+camera :: FCamera
+camera = Field
 
-drawObject :: (FXfrm `IElem` a, FObject `IElem` a) =>
-              Wire s e IO (M44 GL.GLfloat, PlainRec a) ()
-drawObject = mkGen_ $ \(camera, obj) ->
-    let Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec obj
-    in withVAO vao $ do
+drawObject :: (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r)
+              => PlainRec r -> PlainWire ()
+drawObject record = 
+    mkGen_ (\(xfrm, cam) -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
-        setUniforms shdr (modelView =: (rGet objXfrm obj !*! camera))
+        setUniforms shdr (modelView =: (xfrm !*! cam))
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
-        return (Right ())
+        return (Right ()))
+    <<<
+    rGet objXfrm record &&& rGet camera record
+    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec record
 
 pos :: "position" ::: V4 GL.GLfloat
 pos = Field

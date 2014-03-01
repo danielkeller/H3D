@@ -8,9 +8,10 @@ import Control.Exception
 import Control.Monad
 import Control.Wire hiding (when, (.), unless)
 
+import Util
+
 withWindow :: (Window -> IO a)
-               -> (Window -> a ->
-                   Wire (Session IO (Timed NominalDiffTime ())) e IO () b)
+               -> (Window -> a -> PlainWire b)
                -> (a -> IO ()) -> IO ()
 withWindow setup action cleanup = 
     do res <- GLFW.init
@@ -25,12 +26,13 @@ withWindow setup action cleanup =
                  case w of
                      Nothing -> return ()
                      Just wnd -> do makeContextCurrent w
-                                    bracket (setup wnd) cleanup (mainLoop wnd . action wnd)
+                                    bracket (setup wnd) cleanup (mainLoop wnd clockSession_ . action wnd)
                                  `finally` destroyWindow wnd
-          mainLoop wnd wire = do
+          mainLoop wnd s wire = do
               GL.clear [GL.ColorBuffer, GL.DepthBuffer]
               pollEvents
-              (_, wire') <- stepWire wire clockSession_ (Right ())
+              (ds, s') <- stepSession s
+              (_, wire') <- stepWire wire ds (Right ())
               swapBuffers wnd
               close <- windowShouldClose wnd
-              unless close $ mainLoop wnd wire'
+              unless close $ mainLoop wnd s' wire'

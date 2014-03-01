@@ -22,28 +22,11 @@ main :: IO ()
 main = withWindow setup action cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
                          loadObject "teapot.obj"
-          action _ teapot = drawObject . pure
-                                (mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0)
-                                ,objRec =: teapot <+> objXfrm =: eye4)
+          action _ teapot = drawObject $
+                                camera =: pure (mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0)) <+>
+                                objRec =: teapot <+>
+                                objXfrm =: (rotation . timeF)
           cleanup teapot = freeObject teapot
---for another day
-{-
-import TestAPI
-import Data.Typeable(Typeable)
 
-deriving instance Typeable Callbacks
-
-cbs = Callbacks {foo = putStrLn}
-
-main :: IO ()
-main = do
-	res <- runInterpreter (do
-		set [searchPath := ["api", "script"]]
-		loadModules ["Script"]
-		setImportsQ [("Prelude", Nothing), ("Script", Just "Script"), ("TestAPI", Nothing)]
-		interpret "Script.script" (undefined :: Script)
-		)
-	case res of
-		Left err -> print err
-		Right script -> script cbs
--}
+rotation :: (Floating a, Epsilon a, Monad m) => Wire s e m a (M44 a)
+rotation = arr (\ang -> mkTransformation (axisAngle (V3 0 1 0) ang) zero)
