@@ -1,4 +1,5 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts, Arrows #-}
+{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts,
+    Arrows, ConstraintKinds #-}
 module Object (
     Object(),
     objRec,
@@ -15,6 +16,7 @@ import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
 import Data.Vinyl
+import Data.Vinyl.Reflect
 import Graphics.VinylGL
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
@@ -27,9 +29,10 @@ import Data.Attoparsec.ByteString.Char8
 import qualified Data.ByteString.Char8 as B
 import Control.Applicative
 
-import Control.Wire
+import Control.Wire hiding ((<+>))
 
 import Util
+import Uniforms()
 
 data Object = Object { objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
@@ -48,12 +51,14 @@ objRec = Field
 camera :: FCamera
 camera = Field
 
-drawObject :: (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r)
+type UniformFields a = (HasFieldNames a, HasFieldGLTypes a, SetUniformFields a)
+
+drawObject :: (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r, UniformFields (PlainRec r))
               => PlainRec r -> PlainWire ()
 drawObject record = 
     mkGen_ (\(xfrm, cam) -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
-        setUniforms shdr (modelView =: (xfrm !*! cam))
+        setAllUniforms shdr (modelView =: (xfrm !*! cam) <+> record)
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
         return (Right ()))
