@@ -14,6 +14,7 @@ import Data.Record
 
 import Window
 import Object
+import Util
 
 keyCB :: GLFW.KeyCallback
 keyCB wnd GLFW.Key'Escape _ _ _ = GLFW.setWindowShouldClose wnd True
@@ -27,11 +28,15 @@ main :: IO ()
 main = withWindow setup action cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
                          loadObject "teapot.obj"
-          action _ teapot = drawObject $ X :&
-                                Xfrm := (rotation . timeF) :&
-                                Obj := teapot :&
-                                Camera := pure (mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0))
-                                --color =: V4 1 0 0 1
+          action _ teapot = drawObject $ X
+                                :& Xfrm := (rotation . timeF)
+                                :& Obj := teapot
+                                :& Camera := pure (mkTransformationMat (eye3 !!* 0.2) (V3 0 0 0))
+                                :& Uniform Color := (V4 <$> osc 0 timeF
+                                                        <*> osc (2*pi/3) timeF
+                                                        <*> osc (2*pi/3) timeF
+                                                        <*> pure 1 :: PlainWire (V4 GL.GLfloat))
+                            where osc ang = fmap $ (/2) . (+1) . sin . (+ang)
           cleanup teapot = freeObject teapot
 
 rotation :: (Floating a, Epsilon a, Monad m) => Wire s e m a (M44 a)

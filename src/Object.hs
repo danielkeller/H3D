@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts,
-    Arrows, ConstraintKinds #-}
+    Arrows, ConstraintKinds, OverlappingInstances, FlexibleInstances #-}
 module Object (
     Object(),
     Obj(..),
     Xfrm(..),
     Camera(..),
+    Uniform(..),
     freeObject,
     loadObject,
     drawObject,
@@ -50,29 +51,38 @@ instance Name Camera where name = Camera
 
 type Drawable = X :& Xfrm ::: PlainWire (M44 GL.GLfloat) :& Obj ::: Object :& Camera ::: PlainWire (M44 GL.GLfloat)
 
-drawObject :: Convertible r Drawable => r (Id KindStar) -> PlainWire ()
+drawObject :: (HasUniforms r, Convertible r Drawable) => r (Id KindStar) -> PlainWire ()
 drawObject genRecord =
-    mkGen_ (\(xfrm, cam) -> withVAO vao $ do
+    mkGen_ (\(xfrm, (cam, unifs)) -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
         asUniform (xfrm !*! cam) (getUniform shdr "modelView")
+        unifs
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
         return (Right ()))
-    <<< (record !!! Xfrm) &&& (record !!! Camera)
+    <<< (record !!! Xfrm) &&& (record !!! Camera) &&& setAllUniforms shdr genRecord
     where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = record !!! Obj
           record :: Drawable (Id KindStar)
           record = convert genRecord
 
-{-
+newtype Uniform a = Uniform a deriving Show
+
 class HasUniforms a where
-    setAllUniforms :: ShaderProgram -> a -> IO ()
+    setAllUniforms :: ShaderProgram -> a (Id KindStar) -> PlainWire (IO ())
 
 instance HasUniforms X where
-    setAllUniforms _ _ = return ()
+    setAllUniforms _ _ = pure (return ())
 
-instance HasUniforms remain => HasUniforms (name ::: sort :& remain) where
-    setAllUniforms shdr (name := thing &: rest) = 
-      -}
+instance (Show name, HasUniforms remain, AsUniform sort)
+          => HasUniforms (remain :& Uniform name ::: PlainWire sort) where
+    setAllUniforms shdr (rest :& Uniform var := thing) =
+        proc () -> do
+            val <- thing -< ()
+            others <- setAllUniforms shdr rest -< ()
+            returnA -< others >> asUniform val (getUniform shdr (show var))
+
+instance HasUniforms remain => HasUniforms (remain :& thing) where
+    setAllUniforms shdr (rest :& _) = setAllUniforms shdr rest
 
 loadObject :: FilePath -> IO Object
 loadObject file = do
