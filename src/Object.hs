@@ -2,9 +2,9 @@
     Arrows, ConstraintKinds #-}
 module Object (
     Object(),
-    objRec,
-    objXfrm,
-    camera,
+    Obj(..),
+    Xfrm(..),
+    Camera(..),
     freeObject,
     loadObject,
     drawObject,
@@ -15,9 +15,6 @@ import Prelude hiding ((.))
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
-import Data.Vinyl
-import Data.Vinyl.Reflect
-import Graphics.VinylGL
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
 import Foreign.C.Types(CFloat(..))
@@ -31,8 +28,12 @@ import Control.Applicative
 
 import Control.Wire hiding ((<+>))
 
+import Data.Record
+import Data.Record.Combinators
+import Data.Kind
+import Data.TypeFun
+
 import Util
-import Uniforms()
 
 data Object = Object { objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
@@ -40,62 +41,62 @@ data Object = Object { objVAO :: GL.VertexArrayObject
                      , objShader :: ShaderProgram
                      }
 
---it appears that record types have to be monomorphic
-type FXfrm = "transform" ::: PlainWire (M44 GL.GLfloat)
-type FObject = "object" ::: Object
-type FCamera = "camera" ::: PlainWire (M44 GL.GLfloat)
-objXfrm :: FXfrm
-objXfrm = Field
-objRec :: FObject
-objRec = Field
-camera :: FCamera
-camera = Field
+data Xfrm = Xfrm deriving Show
+data Obj = Obj deriving Show
+data Camera = Camera deriving Show
+instance Name Xfrm where name = Xfrm
+instance Name Obj where name = Obj
+instance Name Camera where name = Camera
 
-type UniformFields a = (HasFieldNames a, HasFieldGLTypes a, SetUniformFields a)
+type Drawable = X :& Xfrm ::: PlainWire (M44 GL.GLfloat) :& Obj ::: Object :& Camera ::: PlainWire (M44 GL.GLfloat)
 
-drawObject :: (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r, UniformFields (PlainRec r))
-              => PlainRec r -> PlainWire ()
-drawObject record = 
+drawObject :: Convertible r Drawable => r (Id KindStar) -> PlainWire ()
+drawObject genRecord =
     mkGen_ (\(xfrm, cam) -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
-        setAllUniforms shdr (modelView =: (xfrm !*! cam) <+> record)
+        asUniform (xfrm !*! cam) (getUniform shdr "modelView")
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
         return (Right ()))
-    <<<
-    rGet objXfrm record &&& rGet camera record
-    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec record
+    <<< (record !!! Xfrm) &&& (record !!! Camera)
+    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = record !!! Obj
+          record :: Drawable (Id KindStar)
+          record = convert genRecord
 
-pos :: "position" ::: V4 GL.GLfloat
-pos = Field
+{-
+class HasUniforms a where
+    setAllUniforms :: ShaderProgram -> a -> IO ()
 
-type PosRec = PlainRec '["position" ::: V4 GL.GLfloat]
+instance HasUniforms X where
+    setAllUniforms _ _ = return ()
 
-modelView :: "modelView" ::: M44 GL.GLfloat
-modelView = Field
+instance HasUniforms remain => HasUniforms (name ::: sort :& remain) where
+    setAllUniforms shdr (name := thing &: rest) = 
+      -}
 
 loadObject :: FilePath -> IO Object
 loadObject file = do
     (verts, faces) <- unEither . parseOnly parseObj <$> B.readFile file
-    vertBuf <- bufferVertices verts
+    vertBuf <- fromSource GL.ArrayBuffer verts
     indBuf <- bufferIndices faces
     shdr <- simpleShaderProgram "simple.vert" "simple.frag"
     vao <- makeVAO $ do
-        enableVertices' shdr vertBuf
-        bindVertices vertBuf
+        GL.bindBuffer GL.ArrayBuffer $= Just vertBuf
+        enableAttrib shdr "position"
+        setAttrib shdr "position" GL.ToFloat $ GL.VertexArrayDescriptor 4 GL.Float 0 nullPtr
         GL.bindBuffer GL.ElementArrayBuffer $= Just indBuf
     return Object { objVAO = vao
                   , objNumIndices = fromIntegral (V.length faces)
                   , objShader = shdr
                   , freeObject = do
                         GL.deleteObjectNames [vao]
-                        deleteVertices vertBuf
+                        GL.deleteObjectNames [vertBuf]
                         GL.deleteObjectNames [indBuf]
                   }
     where unEither (Left err) = error err
           unEither (Right res) = res
 
-parseObj :: Parser (V.Vector PosRec, V.Vector Word32)
+parseObj :: Parser (V.Vector (V4 GL.GLfloat), V.Vector Word32)
 parseObj = do res <- many $ ((Left <$> parseVert) <|> (Right <$> parseFace))
               return (V.fromList (lefts res), V.concat (rights res))
 
@@ -103,6 +104,6 @@ parseFace :: Parser (V.Vector Word32)
 parseFace = "f " .*> thenDec <*> (thenDec <*> (thenDec <*> return V.empty))
     where thenDec = (V.cons . (subtract 1) <$> decimal) <* skipSpace
 
-parseVert :: Parser PosRec
-parseVert = "v " .*> ((pos =:) <$> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1))
+parseVert :: Parser (V4 GL.GLfloat)
+parseVert = "v " .*> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1)
     where thenFloat = CFloat . double2Float <$> (double <* skipSpace)
