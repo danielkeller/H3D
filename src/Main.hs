@@ -13,6 +13,7 @@ import Control.Wire hiding ((<+>))
 
 import Window
 import Object
+import Wavefront
 import Util
 
 keyCB :: GLFW.KeyCallback
@@ -26,7 +27,7 @@ color = Field
 main :: IO ()
 main = withWindow setup action cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
-                         loadObject "teapot.obj"
+                         loadWavefront "teapot.obj"
           action wnd teapot = drawObject $
                                 camera =: ((!*!) <$> defaultPerspective wnd <*> pure camLoc) <+>
                                 objRec =: teapot <+>
