@@ -16,7 +16,7 @@ import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
 import Data.Vinyl
---import Graphics.VinylGL hiding (setAllUniforms)
+import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
 import Foreign.C.Types(CFloat(..))
