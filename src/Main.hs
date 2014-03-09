@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable, StandaloneDeriving, DataKinds, TypeOperators #-}
+{-# LANGUAGE DataKinds, TypeOperators #-}
 module Main (
 	main
 ) where
@@ -13,14 +13,13 @@ import Control.Wire hiding ((<+>))
 
 import Window
 import Object
-import Util
 
 keyCB :: GLFW.KeyCallback
 keyCB wnd GLFW.Key'Escape _ _ _ = GLFW.setWindowShouldClose wnd True
 keyCB _ _ _ _ _ = return ()
 --keyCB _ key scan state mods = return ()
 
-color :: "color" ::: Uniform (PlainWire (V4 GL.GLfloat))
+color :: "color" ::: Uniform (V4 GL.GLfloat)
 color = Field
 
 main :: IO ()

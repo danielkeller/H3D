@@ -1,5 +1,4 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts,
-    Arrows, ScopedTypeVariables, FlexibleInstances, GADTs, OverlappingInstances #-}
+{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds #-}
 module Object (
     Object(),
     objRec,
@@ -17,8 +16,7 @@ import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
 import Data.Vinyl
-import GHC.TypeLits (SingI)
-import Graphics.VinylGL hiding (setAllUniforms)
+--import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
 import Foreign.C.Types(CFloat(..))
@@ -33,6 +31,7 @@ import Control.Applicative
 import Control.Wire hiding ((<+>))
 
 import Util
+import Uniforms
 
 data Object = Object { objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
@@ -51,19 +50,17 @@ objRec = Field
 camera :: FCamera
 camera = Field
 
-type Drawable = PlainRec [FXfrm, FObject, FCamera]
+type Drawable r = (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r)
 
-type ModelView = "modelView" ::: Uniform (PlainWire (M44 GL.GLfloat))
+type ModelView = "modelView" ::: Uniform (M44 GL.GLfloat)
 modelView :: ModelView
 modelView = Field
 
-withModelView :: (PlainRec r <: Drawable) => PlainRec r -> PlainRec (ModelView ': r)
-withModelView record = modelView =: Uniform ((!*!) <$> rGet objXfrm rec' <*> rGet camera rec')
+withModelView :: (Drawable r) => PlainRec r -> PlainRec (ModelView ': r)
+withModelView record = modelView =: Uniform ((!*!) <$> rGet objXfrm record <*> rGet camera record)
                        <+> record
-    where rec' :: Drawable
-          rec' = cast record
 
-drawObject :: (HasUniforms r, PlainRec r <: Drawable) => PlainRec r -> PlainWire ()
+drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainWire ()
 drawObject record = 
     mkGen_ (\unifs -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
@@ -72,30 +69,9 @@ drawObject record =
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
         return (Right ()))
     <<< setAllUniforms shdr (withModelView record)
-    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec rec'
-          rec' :: Drawable
-          rec' = cast record
+    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec record
 
 type PosRec = PlainRec '["position" ::: V4 GL.GLfloat]
-
-newtype Uniform a = Uniform a deriving Show
-
-class HasUniforms a where
-    setAllUniforms :: ShaderProgram -> PlainRec a -> PlainWire (IO ())
-
-instance HasUniforms '[] where
-    setAllUniforms _ _ = pure (return ())
-
-instance (SingI sy, HasUniforms rest, AsUniform sort)
-          => HasUniforms (sy ::: Uniform (PlainWire sort) ': rest) where
-    setAllUniforms shdr (Identity (Uniform thing) :& rest) =
-        proc () -> do
-            val <- thing -< ()
-            others <- setAllUniforms shdr rest -< ()
-            returnA -< others >> asUniform val (getUniform shdr (show (Field :: sy ::: ())))
-
-instance HasUniforms rest => HasUniforms (thing ': rest) where
-    setAllUniforms shdr (_ :& rest) = setAllUniforms shdr rest
 
 loadObject :: FilePath -> IO Object
 loadObject file = do
