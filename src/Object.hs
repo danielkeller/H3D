@@ -57,7 +57,7 @@ modelView :: ModelView
 modelView = Field
 
 withModelView :: (Drawable r) => PlainRec r -> PlainRec (ModelView ': r)
-withModelView record = modelView =: Uniform ((!*!) <$> rGet objXfrm record <*> rGet camera record)
+withModelView record = modelView =: Uniform ((!*!) <$> rGet camera record <*> rGet objXfrm record)
                        <+> record
 
 drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainWire ()

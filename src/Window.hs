@@ -1,5 +1,6 @@
 module Window (
-    withWindow
+    withWindow,
+    fbSize
 ) where
 
 import qualified Graphics.Rendering.OpenGL as GL
@@ -12,6 +13,10 @@ import Util
 
 resizeCB :: WindowSizeCallback
 resizeCB _ w h = GL.viewport GL.$= (GL.Position 0 0, GL.Size (fromIntegral w) (fromIntegral h))
+
+fbSize :: Floating a => Window -> PlainWire (a, a)
+fbSize wnd = (fint *** fint) <<< (mkGen_ $ const $ fmap Right $ getFramebufferSize wnd)
+    where fint = arr fromIntegral
 
 withWindow :: (Window -> IO a)
                -> (Window -> a -> PlainWire b)
