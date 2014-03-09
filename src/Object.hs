@@ -1,9 +1,11 @@
-{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts, Arrows #-}
+{-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators, FlexibleContexts,
+    Arrows, ScopedTypeVariables, FlexibleInstances, GADTs, OverlappingInstances #-}
 module Object (
     Object(),
     objRec,
     objXfrm,
     camera,
+    Uniform(..),
     freeObject,
     loadObject,
     drawObject,
@@ -15,7 +17,8 @@ import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
 import Data.Vinyl
-import Graphics.VinylGL
+import GHC.TypeLits (SingI)
+import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
 import Foreign.C.Types(CFloat(..))
@@ -27,7 +30,7 @@ import Data.Attoparsec.ByteString.Char8
 import qualified Data.ByteString.Char8 as B
 import Control.Applicative
 
-import Control.Wire
+import Control.Wire hiding ((<+>))
 
 import Util
 
@@ -48,26 +51,51 @@ objRec = Field
 camera :: FCamera
 camera = Field
 
-drawObject :: (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r)
-              => PlainRec r -> PlainWire ()
+type Drawable = PlainRec [FXfrm, FObject, FCamera]
+
+type ModelView = "modelView" ::: Uniform (PlainWire (M44 GL.GLfloat))
+modelView :: ModelView
+modelView = Field
+
+withModelView :: (PlainRec r <: Drawable) => PlainRec r -> PlainRec (ModelView ': r)
+withModelView record = modelView =: Uniform ((!*!) <$> rGet objXfrm rec' <*> rGet camera rec')
+                       <+> record
+    where rec' :: Drawable
+          rec' = cast record
+
+drawObject :: (HasUniforms r, PlainRec r <: Drawable) => PlainRec r -> PlainWire ()
 drawObject record = 
-    mkGen_ (\(xfrm, cam) -> withVAO vao $ do
+    mkGen_ (\unifs -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
-        setUniforms shdr (modelView =: (xfrm !*! cam))
+        unifs
         GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
         return (Right ()))
-    <<<
-    rGet objXfrm record &&& rGet camera record
-    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec record
-
-pos :: "position" ::: V4 GL.GLfloat
-pos = Field
+    <<< setAllUniforms shdr (withModelView record)
+    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec rec'
+          rec' :: Drawable
+          rec' = cast record
 
 type PosRec = PlainRec '["position" ::: V4 GL.GLfloat]
 
-modelView :: "modelView" ::: M44 GL.GLfloat
-modelView = Field
+newtype Uniform a = Uniform a deriving Show
+
+class HasUniforms a where
+    setAllUniforms :: ShaderProgram -> PlainRec a -> PlainWire (IO ())
+
+instance HasUniforms '[] where
+    setAllUniforms _ _ = pure (return ())
+
+instance (SingI sy, HasUniforms rest, AsUniform sort)
+          => HasUniforms (sy ::: Uniform (PlainWire sort) ': rest) where
+    setAllUniforms shdr (Identity (Uniform thing) :& rest) =
+        proc () -> do
+            val <- thing -< ()
+            others <- setAllUniforms shdr rest -< ()
+            returnA -< others >> asUniform val (getUniform shdr (show (Field :: sy ::: ())))
+
+instance HasUniforms rest => HasUniforms (thing ': rest) where
+    setAllUniforms shdr (_ :& rest) = setAllUniforms shdr rest
 
 loadObject :: FilePath -> IO Object
 loadObject file = do
@@ -99,5 +127,5 @@ parseFace = "f " .*> thenDec <*> (thenDec <*> (thenDec <*> return V.empty))
     where thenDec = (V.cons . (subtract 1) <$> decimal) <* skipSpace
 
 parseVert :: Parser PosRec
-parseVert = "v " .*> ((pos =:) <$> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1))
+parseVert = "v " .*> ((Field =:) <$> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1))
     where thenFloat = CFloat . double2Float <$> (double <* skipSpace)
