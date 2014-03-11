@@ -27,18 +27,21 @@ color = Field
 main :: IO ()
 main = withWindow setup action cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
-                         loadWavefront "teapot.obj"
+                         loadWavefront $ "assets/capsule.obj"
           action wnd teapot = drawObject $
                                 camera =: ((!*!) <$> defaultPerspective wnd <*> pure camLoc) <+>
                                 objRec =: teapot <+>
-                                objXfrm =: (rotation . timeF) <+>
+                                objXfrm =: ((!*!) <$> scale (pure 3) <*> (rotation . timeF)) <+>
                                 color =: Uniform (V4 <$> osc 0 timeF
                                                      <*> osc (2*pi/3) timeF
                                                      <*> osc (2*pi/3) timeF
                                                      <*> pure 1)
                             where osc ang = fmap $ (/2) . (+1) . sin . (+ang)
-                                  camLoc = mkTransformationMat (eye3 !!* 0.2) (V3 0 0 (-2))
+                                  camLoc = mkTransformationMat (eye3) (V3 0 0 (-6))
           cleanup teapot = freeObject teapot
+
+scale :: (Floating a, Epsilon a, Monad m) => Wire s e m a (M44 a)
+scale = arr (\amt -> m33_to_m44 (eye3 !!* amt))
 
 rotation :: (Floating a, Epsilon a, Monad m) => Wire s e m a (M44 a)
 rotation = arr (\ang -> mkTransformation (axisAngle (V3 0 1 0) ang) zero)

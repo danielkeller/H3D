@@ -38,12 +38,12 @@ data Object = Object { objVAO :: GL.VertexArrayObject
 type ViableVertex t = (HasFieldNames t, HasFieldSizes t, HasFieldDims t,
                        HasFieldGLTypes t, V.Storable t)
 
-makeObject :: (ViableVertex(PlainRec rs), BufferSource (V.Vector (PlainRec rs)))
+makeObject :: (ViableVertex (PlainRec rs), BufferSource (V.Vector (PlainRec rs)))
               => V.Vector (PlainRec rs) -> V.Vector Word32 -> IO Object
 makeObject verts faces = do
     vertBuf <- bufferVertices verts
     indBuf <- bufferIndices faces
-    shdr <- simpleShaderProgram "simple.vert" "simple.frag"
+    shdr <- simpleShaderProgram "assets/simple.vert" "assets/simple.frag"
     vao <- makeVAO $ do
         enableVertices' shdr vertBuf
         bindVertices vertBuf
