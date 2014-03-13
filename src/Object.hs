@@ -83,7 +83,6 @@ drawObject record =
     mkGen_ (\unifs -> withVAO vao $ do
         GL.currentProgram $= Just (program shdr)
         unifs
-        GL.polygonMode $= (GL.Line, GL.Line)
         GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
         return (Right ()))
     <<< setAllUniforms shdr (withModelView record)

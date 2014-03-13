@@ -1,9 +1,12 @@
 #version 330
 
 out vec4 outputColor;
-uniform vec4 color;
+
+in vec2 texCoordFrag;
+in vec3 normalFrag;
+uniform sampler2D tex;
 
 void main()
 {
-   outputColor = color;
+    outputColor = texture(tex, texCoordFrag);
 }

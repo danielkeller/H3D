@@ -35,6 +35,7 @@ withWindow setup action cleanup =
                      Nothing -> return ()
                      Just wnd -> do makeContextCurrent w
                                     setWindowSizeCallback wnd (Just resizeCB)
+                                    GL.cullFace GL.$= Just GL.Back
                                     bracket (setup wnd) cleanup (mainLoop wnd clockSession_ . action wnd)
                                  `finally` destroyWindow wnd
           mainLoop wnd s wire = do
@@ -42,6 +43,8 @@ withWindow setup action cleanup =
               pollEvents
               (ds, s') <- stepSession s
               (_, wire') <- stepWire wire ds (Right ())
+              errs <- GL.get GL.errors
+              unless (null errs) (print errs)
               swapBuffers wnd
               close <- windowShouldClose wnd
               unless close $ mainLoop wnd s' wire'
