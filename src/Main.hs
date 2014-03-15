@@ -8,7 +8,6 @@ import Prelude hiding ((.))
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
 import Graphics.GLUtil
-import Linear
 import Data.Vinyl
 import Control.Wire hiding ((<+>))
 

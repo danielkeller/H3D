@@ -12,15 +12,15 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.Vector.Storable as V
 import Foreign.C.Types(CFloat(..))
 import Data.Vinyl
-import Linear
+import Data.Vec.OpenGL
 
 import Object
 import Util
 
 -- the types of information that .obj files support
-type PosRec = PlainRec '["position" ::: V4 GL.GLfloat]
-type NormRec = PlainRec '["normal" ::: V3 GL.GLfloat]
-type TexRec = PlainRec '["texCoord" ::: V2 GL.GLfloat]
+type PosRec = PlainRec '["position" ::: Vec4]
+type NormRec = PlainRec '["normal" ::: Vec3]
+type TexRec = PlainRec '["texCoord" ::: Vec2]
 
 -- obj file lines
 data WfLine = V PosRec | VN NormRec | VT TexRec | F (V.Vector Word32)
@@ -31,8 +31,8 @@ loadWavefront :: FilePath -> IO Object
 loadWavefront file = do
     recs <- fromEither file . parseOnly parseObj <$> B.readFile file
     let vs = [r | V r <- recs]
-        vns = [r | VN r <- recs] ++ repeat (Field =: zero)
-        vts = [r | VT r <- recs] ++ repeat (Field =: zero)
+        vns = [r | VN r <- recs] ++ repeat (Field =: 0)
+        vts = [r | VT r <- recs] ++ repeat (Field =: 0)
         verts = zipWith (<+>) (zipWith (<+>) vs vns) vts
     makeObject (V.fromList verts) $ V.concat [f | F f <- recs]
 
@@ -49,9 +49,9 @@ parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm)
 
         thenFloat = CFloat . double2Float <$> (double <* skipSpace)
 
-        parseVert = (Field =:) <$> "v " .*> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1)
-        parseNorm = (Field =:) <$> "vn " .*> (V3 <$> thenFloat <*> thenFloat <*> thenFloat)
-        parseTex = (Field =:) <$> "vt " .*> (V2 <$> thenFloat <*> thenFloat)
+        parseVert = (Field =:) <$> "v " .*> (thenFloat .*. thenFloat .*. thenFloat .**. return 1)
+        parseNorm = (Field =:) <$> "vn " .*> (thenFloat .*. thenFloat .*. thenFloat)
+        parseTex = (Field =:) <$> "vt " .*> (thenFloat .*. thenFloat)
 
         --parseMtl = MtlLib . B.unpack <$> (string "mtllib " *> takeTill isSpace <* skipSpace)
         --parseUseMtl = UseMtl . B.unpack <$> (string "usemtl " *> takeTill isSpace <* skipSpace)

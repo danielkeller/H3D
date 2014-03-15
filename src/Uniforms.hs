@@ -8,6 +8,7 @@ module Uniforms (
 
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
+import Data.Vec.OpenGL
 import Data.Vinyl
 import Control.Wire hiding ((<+>))
 import Graphics.GLUtil
@@ -45,15 +46,15 @@ unifLoc name unifs realTy = case M.lookup name unifs of
                                 ++ show ty ++ "'"
 
 --case for regular uniforms
-instance (SingI sy, HasUniforms rest, AsUniform sort, HasVariableType sort)
+instance (SingI sy, HasUniforms rest, VUniform sort)
           => HasUniforms (sy ::: Uniform sort ': rest) where
     setUniforms unifs (Identity (Uniform thing) :& rest) =
         proc () -> do
             val <- thing -< ()
             others <- setUniforms (M.delete name unifs) rest -< ()
-            returnA -< others >> asUniform val (unifLoc name unifs realTy)
+            returnA -< others >> toUniform val (unifLoc name unifs realTy)
         where name = show (Field :: sy ::: ())
-              realTy = variableType (undefined :: sort)
+              realTy = unifType (undefined :: sort)
 
 --case for textures
 instance (SingI sy, HasUniforms rest)
@@ -63,11 +64,8 @@ instance (SingI sy, HasUniforms rest)
             others <- setUniforms (M.delete name unifs) rest -< ()
             returnA -< do others
                           GL.textureBinding GL.Texture2D $= Just tex
-                          GL.TextureUnit n <- GL.get GL.activeTexture
-                          --this is stored as a uint, but you have to set the uniform as an 
-                          --int, which is incredibly stupid.
-                          asUniform (fromIntegral n :: GL.GLint)
-                                    (unifLoc name unifs GL.Sampler2D)
+                          un@(GL.TextureUnit n) <- GL.get GL.activeTexture
+                          GL.uniform (unifLoc name unifs GL.Sampler2D) $= un
                           GL.activeTexture $= GL.TextureUnit (n + 1)
         where name = show (Field :: sy ::: ())
 

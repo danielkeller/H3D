@@ -19,10 +19,10 @@ import Data.Vinyl
 import Data.Vinyl.Reflect
 import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
-import Linear
 import Foreign.Ptr(nullPtr)
 
-import Control.Applicative
+import Data.Vec.OpenGL
+import Data.Vec.Applicative
 
 import Control.Wire hiding ((<+>))
 
@@ -58,9 +58,9 @@ makeObject verts faces = do
                   }
 
 --it appears that record types have to be monomorphic
-type FXfrm = "transform" ::: PlainWire (M44 GL.GLfloat)
+type FXfrm = "transform" ::: PlainWire Mat4
 type FObject = "object" ::: Object
-type FCamera = "camera" ::: PlainWire (M44 GL.GLfloat)
+type FCamera = "camera" ::: PlainWire Mat4
 objXfrm :: FXfrm
 objXfrm = Field
 objRec :: FObject
@@ -70,12 +70,12 @@ camera = Field
 
 type Drawable r = (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r)
 
-type ModelView = "modelView" ::: Uniform (M44 GL.GLfloat)
+type ModelView = "modelView" ::: Uniform Mat4
 modelView :: ModelView
 modelView = Field
 
 withModelView :: (Drawable r) => PlainRec r -> PlainRec (ModelView ': r)
-withModelView record = modelView =: Uniform ((!*!) <$> rGet camera record <*> rGet objXfrm record)
+withModelView record = modelView =: Uniform (rGet camera record `multmm` rGet objXfrm record)
                        <+> record
 
 drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainWire ()
