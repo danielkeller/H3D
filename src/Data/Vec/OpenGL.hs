@@ -5,9 +5,7 @@ module Data.Vec.OpenGL (
     toUniform,
 
     Mat4,
-    Vec2, Vec3, Vec4,
-
-    module Data.Vec
+    Vec2, Vec3, Vec4
 ) where
 
 import Graphics.Rendering.OpenGL.Raw.Core31
@@ -17,8 +15,6 @@ import Foreign.Storable
 import Foreign.Marshal.Utils
 import Foreign.Marshal.Array
 
-import Data.Vec hiding (length, zipWith,
-                        Vec4, Vec3, Vec2)
 import qualified Data.Vec as V
 
 class VUniform a where
@@ -42,7 +38,7 @@ type Vec2 = V.Vec2 GLfloat
 
 instance VUniform Mat4 where
     unifType _ = FloatMat4
-    toUniformV loc num val = glUniformMatrix4fv loc num 0 (castPtr val :: Ptr GLfloat)
+    toUniformV loc num val = glUniformMatrix4fv loc num 1 (castPtr val :: Ptr GLfloat)
 
 instance VUniform Vec4 where
     unifType _ = FloatVec4

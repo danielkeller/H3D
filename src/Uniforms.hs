@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances, OverlappingInstances, Arrows,
     DataKinds, TypeOperators, GADTs, ScopedTypeVariables #-}
 module Uniforms (
-    HasUniforms(..),
+    HasUniforms(),
     setAllUniforms,
     Uniform(..)
 ) where

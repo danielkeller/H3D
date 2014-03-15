@@ -2,33 +2,36 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Data.Vec.Applicative (
     (.**.), (.*.),
+
+    identity,
+
+    scaling, rotationY,
+
+    multmm
 ) where
 
---import qualified Prelude as P
---import Prelude (Functor(..))
-import Control.Wire
+import Control.Applicative
+import qualified Data.Vec as V
 
---import Control.Applicative
-import Data.Vec as V
-
-(.**.) :: Applicative f => f a -> f b -> f (a :. (b :. ()))
+(.**.) :: Applicative f => f a -> f b -> f (a V.:. (b V.:. ()))
 l .**. r = l .*. r .*. (pure ())
 
-(.*.) :: Applicative f => f a -> f b -> f (a :. b)
-(.*.) = liftA2 (:.)
+(.*.) :: Applicative f => f a -> f b -> f (a V.:. b)
+(.*.) = liftA2 (V.:.)
 
 infixr 4 .*.
 
---instance (Applicative f, Vec n a v) => Vec n (f a) (f v) where
---    mkVec = liftA2 mkVec
+identity :: (Applicative f, V.Vec n a v, V.Vec n v m, Num v, Num m, V.SetDiagonal v m) => f m
+identity = pure V.identity
 
-instance (Monad m, Map x y u v) => Map x y (Wire s e m a u) (Wire s e m a v) where
-    map f = fmap (V.map f)
+multmm :: (Applicative f, V.Map v v' m1 m3, V.Map v a b v', V.Transpose m2 b, V.Fold v a, Num v, Num a)
+        => f m1 -> f m2 -> f m3
+multmm = liftA2 V.multmm
 
-instance (Monad m, Transpose u v) => Transpose (Wire s e m a u) (Wire s e m a v) where
-    transpose  = fmap transpose
+infixl 7 `multmm`
 
-instance (Monad m, Fold v b) => Fold (Wire s e m a v) (Wire s e m a b) where
-    fold f = fmap (V.fold f)
-    foldl f = fmap (V.foldl f)
-    foldr f = fmap (V.foldr f)
+scaling :: (Functor f, Num a) => f (V.Vec3 a) -> f (V.Mat44 a)
+scaling = fmap V.scaling
+
+rotationY :: (Functor f, Floating a) => f a -> f (V.Mat44 a)
+rotationY = fmap V.rotationY

@@ -3,7 +3,6 @@ module Wavefront (
     loadWavefront,
 ) where
 
-import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.GLUtil
 import GHC.Float (double2Float)
 import Control.Applicative
@@ -13,6 +12,7 @@ import qualified Data.Vector.Storable as V
 import Foreign.C.Types(CFloat(..))
 import Data.Vinyl
 import Data.Vec.OpenGL
+import Data.Vec.Applicative
 
 import Object
 import Util
@@ -50,8 +50,8 @@ parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm)
         thenFloat = CFloat . double2Float <$> (double <* skipSpace)
 
         parseVert = (Field =:) <$> "v " .*> (thenFloat .*. thenFloat .*. thenFloat .**. return 1)
-        parseNorm = (Field =:) <$> "vn " .*> (thenFloat .*. thenFloat .*. thenFloat)
-        parseTex = (Field =:) <$> "vt " .*> (thenFloat .*. thenFloat)
+        parseNorm = (Field =:) <$> "vn " .*> (thenFloat .*. thenFloat .**. thenFloat)
+        parseTex = (Field =:) <$> "vt " .*> (thenFloat .**. thenFloat)
 
         --parseMtl = MtlLib . B.unpack <$> (string "mtllib " *> takeTill isSpace <* skipSpace)
         --parseUseMtl = UseMtl . B.unpack <$> (string "usemtl " *> takeTill isSpace <* skipSpace)

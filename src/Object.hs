@@ -16,10 +16,9 @@ import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
 import Data.Vinyl
-import Data.Vinyl.Reflect
-import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
 import Foreign.Ptr(nullPtr)
+--import Foreign.Storable(sizeOf)
 
 import Data.Vec.OpenGL
 import Data.Vec.Applicative
@@ -28,6 +27,7 @@ import Control.Wire hiding ((<+>))
 
 import Util
 import Uniforms
+import Attributes
 
 data Object = Object { objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
@@ -35,25 +35,22 @@ data Object = Object { objVAO :: GL.VertexArrayObject
                      , objShader :: ShaderProgram
                      }
 
-type ViableVertex t = (HasFieldNames t, HasFieldSizes t, HasFieldDims t,
-                       HasFieldGLTypes t, V.Storable t)
-
-makeObject :: (ViableVertex (PlainRec rs), BufferSource (V.Vector (PlainRec rs)))
-              => V.Vector (PlainRec rs) -> V.Vector Word32 -> IO Object
+makeObject :: (HasAttributes rs) => V.Vector (PlainRec rs) -> V.Vector Word32 -> IO Object
 makeObject verts faces = do
-    vertBuf <- bufferVertices verts
-    indBuf <- bufferIndices faces
     shdr <- simpleShaderProgram "assets/simple.vert" "assets/simple.frag"
+    vertBuf <- fromSource GL.ArrayBuffer verts
+    indBuf <- bufferIndices faces
     vao <- makeVAO $ do
-        enableVertices' shdr vertBuf
-        bindVertices vertBuf
+        enableAttrib shdr "position"
+        setAttrib shdr "position" GL.ToFloat
+            $ GL.VertexArrayDescriptor 4 GL.Float 0 nullPtr -- (fromIntegral (sizeOf (V.head verts)) - 16) nullPtr
         GL.bindBuffer GL.ElementArrayBuffer $= Just indBuf
     return Object { objVAO = vao
                   , objNumIndices = fromIntegral (V.length faces)
                   , objShader = shdr
                   , freeObject = do
                         GL.deleteObjectNames [vao]
-                        deleteVertices vertBuf
+                        GL.deleteObjectNames [vertBuf]
                         GL.deleteObjectNames [indBuf]
                   }
 

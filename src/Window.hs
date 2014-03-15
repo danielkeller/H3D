@@ -36,6 +36,8 @@ withWindow setup action cleanup =
                      Just wnd -> do makeContextCurrent w
                                     setWindowSizeCallback wnd (Just resizeCB)
                                     GL.cullFace GL.$= Just GL.Back
+                                    --set the clear color to a pleasant warm off-black
+                                    GL.clearColor GL.$= (GL.Color4 0.28 0.25 0.25 1)
                                     bracket (setup wnd) cleanup (mainLoop wnd clockSession_ . action wnd)
                                  `finally` destroyWindow wnd
           mainLoop wnd s wire = do
