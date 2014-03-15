@@ -63,11 +63,8 @@ instance (SingI sy, HasUniforms rest)
             others <- setUniforms (M.delete name unifs) rest -< ()
             returnA -< do others
                           GL.textureBinding GL.Texture2D $= Just tex
-                          GL.TextureUnit n <- GL.get GL.activeTexture
-                          --this is stored as a uint, but you have to set the uniform as an 
-                          --int, which is incredibly stupid.
-                          asUniform (fromIntegral n :: GL.GLint)
-                                    (unifLoc name unifs GL.Sampler2D)
+                          tu@(GL.TextureUnit n) <- GL.get GL.activeTexture
+                          GL.uniform (unifLoc name unifs GL.Sampler2D) $= tu
                           GL.activeTexture $= GL.TextureUnit (n + 1)
         where name = show (Field :: sy ::: ())
 
