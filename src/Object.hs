@@ -19,10 +19,8 @@ import Data.Vinyl
 import Data.Vinyl.Reflect
 import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
-import Linear
+import Linear.Applicative
 import Foreign.Ptr(nullPtr)
-
-import Control.Applicative
 
 import Control.Wire hiding ((<+>))
 
@@ -75,7 +73,7 @@ modelView :: ModelView
 modelView = Field
 
 withModelView :: (Drawable r) => PlainRec r -> PlainRec (ModelView ': r)
-withModelView record = modelView =: Uniform ((!*!) <$> rGet camera record <*> rGet objXfrm record)
+withModelView record = modelView =: Uniform (rGet camera record !*! rGet objXfrm record)
                        <+> record
 
 drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainWire ()

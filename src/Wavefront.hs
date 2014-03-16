@@ -12,7 +12,8 @@ import qualified Data.ByteString.Char8 as B
 import qualified Data.Vector.Storable as V
 import Foreign.C.Types(CFloat(..))
 import Data.Vinyl
-import Linear
+import Linear.Applicative hiding (zero)
+import Linear (zero)
 
 import Object
 import Util
@@ -49,9 +50,9 @@ parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm)
 
         thenFloat = CFloat . double2Float <$> (double <* skipSpace)
 
-        parseVert = (Field =:) <$> "v " .*> (V4 <$> thenFloat <*> thenFloat <*> thenFloat <*> return 1)
-        parseNorm = (Field =:) <$> "vn " .*> (V3 <$> thenFloat <*> thenFloat <*> thenFloat)
-        parseTex = (Field =:) <$> "vt " .*> (V2 <$> thenFloat <*> thenFloat)
+        parseVert = (Field =:) <$> "v " .*> (vec4 thenFloat thenFloat thenFloat (return 1))
+        parseNorm = (Field =:) <$> "vn " .*> (vec3 thenFloat thenFloat thenFloat)
+        parseTex = (Field =:) <$> "vt " .*> (vec2 thenFloat thenFloat)
 
         --parseMtl = MtlLib . B.unpack <$> (string "mtllib " *> takeTill isSpace <* skipSpace)
         --parseUseMtl = UseMtl . B.unpack <$> (string "usemtl " *> takeTill isSpace <* skipSpace)
