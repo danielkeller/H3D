@@ -3,7 +3,6 @@ module Wavefront (
     loadWavefront,
 ) where
 
-import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.GLUtil
 import GHC.Float (double2Float)
 import Control.Applicative
@@ -13,15 +12,16 @@ import qualified Data.Vector.Storable as V
 import Foreign.C.Types(CFloat(..))
 import Data.Vinyl
 import Linear.Applicative hiding (zero)
+import Linear.GL
 import Linear (zero)
 
 import Object
 import Util
 
 -- the types of information that .obj files support
-type PosRec = PlainRec '["position" ::: V4 GL.GLfloat]
-type NormRec = PlainRec '["normal" ::: V3 GL.GLfloat]
-type TexRec = PlainRec '["texCoord" ::: V2 GL.GLfloat]
+type PosRec = PlainRec '["position" ::: Vec4]
+type NormRec = PlainRec '["normal" ::: Vec3]
+type TexRec = PlainRec '["texCoord" ::: Vec2]
 
 -- obj file lines
 data WfLine = V PosRec | VN NormRec | VT TexRec | F (V.Vector Word32)

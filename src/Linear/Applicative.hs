@@ -1,8 +1,7 @@
 module Linear.Applicative (
-    V2(), V3(), V4(), M44, M33,
     vec2, vec3, vec4,
     mkTransformationMat,
-    eye3,
+    eye3, eye4,
     zero,
     scale, rotation, perspective,
 
@@ -16,6 +15,9 @@ import Linear (V2(..), V3(..), V4(..), M44, M33)
 
 eye3 :: (Applicative f, Num a) => f (M33 a)
 eye3 = pure L.eye3
+
+eye4 :: (Applicative f, Num a) => f (M44 a)
+eye4 = pure L.eye4
 
 zero :: (Applicative f, L.Additive v, Num a) => f (v a)
 zero = pure L.zero

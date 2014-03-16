@@ -3,7 +3,7 @@ module Window (
     fbSize
 ) where
 
-import qualified Graphics.Rendering.OpenGL as GL
+import Graphics.Rendering.OpenGL
 import Graphics.UI.GLFW as GLFW
 import Control.Exception
 import Control.Monad
@@ -12,7 +12,7 @@ import Control.Wire hiding (when, (.), unless)
 import Util
 
 resizeCB :: WindowSizeCallback
-resizeCB _ w h = GL.viewport GL.$= (GL.Position 0 0, GL.Size (fromIntegral w) (fromIntegral h))
+resizeCB _ w h = viewport $= (Position 0 0, Size (fromIntegral w) (fromIntegral h))
 
 fbSize :: Floating a => Window -> PlainWire (a, a)
 fbSize wnd = (fint *** fint) <<< (mkGen_ $ const $ fmap Right $ getFramebufferSize wnd)
@@ -35,15 +35,16 @@ withWindow setup action cleanup =
                      Nothing -> return ()
                      Just wnd -> do makeContextCurrent w
                                     setWindowSizeCallback wnd (Just resizeCB)
-                                    GL.cullFace GL.$= Just GL.Back
+                                    cullFace $= Just Back
+                                    depthFunc $= Just Less
                                     bracket (setup wnd) cleanup (mainLoop wnd clockSession_ . action wnd)
                                  `finally` destroyWindow wnd
           mainLoop wnd s wire = do
-              GL.clear [GL.ColorBuffer, GL.DepthBuffer]
+              clear [ColorBuffer, DepthBuffer]
               pollEvents
               (ds, s') <- stepSession s
               (_, wire') <- stepWire wire ds (Right ())
-              errs <- GL.get GL.errors
+              errs <- get errors
               unless (null errs) (print errs)
               swapBuffers wnd
               close <- windowShouldClose wnd

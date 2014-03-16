@@ -9,6 +9,7 @@ import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
 import Graphics.GLUtil
 import Linear.Applicative
+import Linear.GL
 import Data.Vinyl
 import Control.Wire hiding ((<+>))
 
@@ -34,13 +35,30 @@ main = withWindow setup action cleanup
                          tex <- fromEither "texture" <$> readTexture "assets/capsule.png"
                          GL.textureFilter GL.Texture2D GL.$= ((GL.Linear', Nothing), GL.Linear')
                          return (obj, tex)
-          action wnd (obj, tex) = drawObject
-                                $   camera =: (defaultPerspective wnd !*! camLoc)
-                                <+> objRec =: obj
-                                <+> objXfrm =: (scale 3 !*! rotation timeF)
-                                <+> texture =: tex
+          action wnd (obj, tex) = rGet draw (drawObject (
+                                             simpleObject
+                                         <+> objXfrm =: eye4
+                                         <+> objChildren =:
+                                            [ child $ simpleObject
+                                                    <+> objXfrm =: spinaround
+                                                    <+> objChildren =:
+                                                [ child $ simpleObject
+                                                        <+> objXfrm =: spinaround2
+                                                        <+> objChildren =: []
+                                                ]
+                                            ]
+                                         ))
+                                    $ (defaultPerspective wnd !*! camLoc)
                             where camLoc = mkTransformationMat eye3 (vec3 0 0 (-6))
+                                  spinaround = rotation timeF
+                                               !*! mkTransformationMat eye3 (vec3 3 0 0)
+                                               !*! scale 0.5
+                                  spinaround2 = rotation (3 * timeF)
+                                               !*! mkTransformationMat eye3 (vec3 3 0 0)
+                                               !*! scale 0.5
+                                  simpleObject = objRec =: obj
+                                            <+> texture =: tex
           cleanup (obj, _) = freeObject obj
 
-defaultPerspective :: Floating a => GLFW.Window -> PlainWire (M44 a)
+defaultPerspective :: GLFW.Window -> PlainWire Mat4
 defaultPerspective wnd = perspective 0.1 100 (pi/2) . uncurry (/) <$> fbSize wnd

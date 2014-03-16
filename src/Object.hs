@@ -1,9 +1,11 @@
-{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds, Arrows #-}
 module Object (
     Object,
     objRec,
     objXfrm,
-    camera,
+    objChildren,
+    child,
+    draw,
     Uniform(..),
     drawObject,
     freeObject,
@@ -20,6 +22,7 @@ import Data.Vinyl.Reflect
 import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
 import Linear.Applicative
+import Linear.GL
 import Foreign.Ptr(nullPtr)
 
 import Control.Wire hiding ((<+>))
@@ -56,32 +59,43 @@ makeObject verts faces = do
                   }
 
 --it appears that record types have to be monomorphic
-type FXfrm = "transform" ::: PlainWire (M44 GL.GLfloat)
-type FObject = "object" ::: Object
-type FCamera = "camera" ::: PlainWire (M44 GL.GLfloat)
-objXfrm :: FXfrm
+type Xfrm = "transform" ::: PlainWire Mat4
+type Obj = "object" ::: Object
+type Children = "children" ::: [PlainRec '[Draw]]
+objXfrm :: Xfrm
 objXfrm = Field
-objRec :: FObject
+objRec :: Obj
 objRec = Field
-camera :: FCamera
-camera = Field
+objChildren :: Children
+objChildren = Field
 
-type Drawable r = (FXfrm `IElem` r, FObject `IElem` r, FCamera `IElem` r)
+child :: (HasUniforms r, Drawable r) => PlainRec r -> PlainRec '[Draw]
+child = cast . drawObject
 
-type ModelView = "modelView" ::: Uniform (M44 GL.GLfloat)
+type Drawable r = (Xfrm `IElem` r, Obj `IElem` r, Children `IElem` r)
+
+type Draw = "draw" ::: (PlainWire Mat4 -> PlainWire ())
+draw :: Draw
+draw = Field
+
+type ModelView = "modelView" ::: Uniform Mat4
 modelView :: ModelView
 modelView = Field
 
-withModelView :: (Drawable r) => PlainRec r -> PlainRec (ModelView ': r)
-withModelView record = modelView =: Uniform (rGet camera record !*! rGet objXfrm record)
+withModelView :: (Drawable r) => PlainRec r -> PlainWire Mat4 -> PlainRec (ModelView ': r)
+withModelView record camera = modelView =: Uniform (camera !*! rGet objXfrm record)
                        <+> record
 
-drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainWire ()
-drawObject record = 
-    mkGen_ (\unifs -> withVAO vao $ do
-        GL.currentProgram $= Just (program shdr)
-        unifs
-        GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
-        return (Right ()))
-    <<< setAllUniforms shdr (withModelView record)
+drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainRec (Draw ': r)
+drawObject record = draw =: getMv <+> record
     where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec record
+          doDraw :: IO () -> IO (Either e ())
+          doDraw unifs = withVAO vao $ do
+              GL.currentProgram $= Just (program shdr)
+              unifs
+              GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
+              return (Right ())
+          getMv camera = (mkGen_ doDraw <<< setAllUniforms shdr (withModelView record camera))
+                         >>> rest (rGet objChildren record) 
+              where rest [] = pure ()
+                    rest (c:cs) = (rGet draw c (camera !*! rGet objXfrm record)) >>> rest cs
