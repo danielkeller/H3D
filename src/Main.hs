@@ -15,6 +15,7 @@ import Control.Wire hiding ((<+>))
 
 import Window
 import Object
+import Scene
 import Wavefront
 import Util
 
@@ -29,36 +30,41 @@ texture :: "tex" ::: GL.TextureObject
 texture = Field
 
 main :: IO ()
-main = withWindow setup action cleanup
+main = withWindow setup scene cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
                          obj <- loadWavefront "assets/capsule.obj"
                          tex <- fromEither "texture" <$> readTexture "assets/capsule.png"
                          GL.textureFilter GL.Texture2D GL.$= ((GL.Linear', Nothing), GL.Linear')
                          return (obj, tex)
-          action wnd (obj, tex) = rGet draw (drawObject (
-                                             simpleObject
-                                         <+> objXfrm =: eye4
-                                         <+> objChildren =:
-                                            [ child $ simpleObject
-                                                    <+> objXfrm =: spinaround
-                                                    <+> objChildren =:
-                                                [ child $ simpleObject
-                                                        <+> objXfrm =: spinaround2
-                                                        <+> objChildren =: []
-                                                ]
-                                            ]
-                                         ))
-                                    $ (defaultPerspective wnd !*! camLoc)
-                            where camLoc = mkTransformationMat eye3 (vec3 0 0 (-6))
-                                  spinaround = rotation timeF
-                                               !*! mkTransformationMat eye3 (vec3 3 0 0)
-                                               !*! scale 0.5
-                                  spinaround2 = rotation (3 * timeF)
-                                               !*! mkTransformationMat eye3 (vec3 3 0 0)
-                                               !*! scale 0.5
-                                  simpleObject = objRec =: obj
-                                            <+> texture =: tex
           cleanup (obj, _) = freeObject obj
+
+scene :: GLFW.Window -> (Object, GL.TextureObject) -> PlainWire ()
+scene wnd (obj, tex) = sceneRoot $
+    camera =: (defaultPerspective wnd !*! camLoc) <+>
+    children =: [
+        child $ simpleObject <+>
+        transform =: eye4 <+>
+        children =: [
+            child $ simpleObject <+>
+            transform =: spinaround <+>
+            children =: [
+                child $ simpleObject <+>
+                transform =: spinaround2 <+>
+                children =: []
+            ],
+            child $ simpleObject <+>
+            transform =: spinaround2 <+>
+            children =: []
+        ]
+    ]
+    where camLoc = mkTransformationMat eye3 (vec3 0 0 (-6))
+          spinaround = rotation timeF
+                       !*! mkTransformationMat eye3 (vec3 3 0 0)
+                       !*! scale 0.5
+          spinaround2 = rotation (3 * timeF)
+                       !*! mkTransformationMat eye3 (vec3 2 0 0)
+                       !*! scale 0.5
+          simpleObject = objRec =: obj <+> texture =: tex
 
 defaultPerspective :: GLFW.Window -> PlainWire Mat4
 defaultPerspective wnd = perspective 0.1 100 (pi/2) . uncurry (/) <$> fbSize wnd
