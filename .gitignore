@@ -5,3 +5,5 @@ dist
 *sublime*
 api
 script
+.cabal-sandbox
+cabal.sandbox.config

@@ -38,7 +38,7 @@ main = withWindow setup scene cleanup
                          return (obj, tex)
           cleanup (obj, _) = freeObject obj
 
-scene :: GLFW.Window -> (Object, GL.TextureObject) -> PlainWire ()
+scene :: GLFW.Window -> (Object, GL.TextureObject) -> PlainWire (Float -> IO ())
 scene wnd (obj, tex) = sceneRoot $
     camera =: (defaultPerspective wnd !*! camLoc) <+>
     children =: [

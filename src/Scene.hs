@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, TypeOperators, ConstraintKinds, FlexibleContexts #-}
+{-# LANGUAGE DataKinds, TypeOperators, ConstraintKinds, FlexibleContexts, Arrows #-}
 module Scene (
     Transform, transform,
     Children, children,
@@ -14,7 +14,7 @@ import Control.Wire hiding ((<+>), (.))
 
 import Util
 
-type Draw = "draw" ::: (PlainWire Mat4 -> PlainWire ())
+type Draw = "draw" ::: (PlainWire Mat4 -> PlainWire DrawFun)
 draw :: Draw
 draw = Field
 
@@ -30,7 +30,11 @@ camera :: Camera
 camera = Field
 type Scene r = (Camera `IElem` r, Children `IElem` r)
 
-sceneRoot :: Scene r => PlainRec r -> PlainWire ()
-sceneRoot scene = rest (rGet children scene) 
-      where rest [] = pure ()
-            rest (c:cs) = (rGet draw c (rGet camera scene)) >>> rest cs
+--there's probably a nicer way to do this
+sceneRoot :: Scene r => PlainRec r -> PlainWire DrawFun
+sceneRoot scene = rest $ map (rGet draw) (rGet children scene) <*> [rGet camera scene]
+      where rest [] = pure (\_ -> return ())
+            rest (c:cs) = proc () -> do
+                            draw1 <- c -< ()
+                            drawRest <- rest cs -< ()
+                            returnA -< \alpha -> draw1 alpha >> drawRest alpha

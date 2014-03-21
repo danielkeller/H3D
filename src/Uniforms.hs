@@ -18,7 +18,7 @@ import Util
 
 newtype Uniform a = Uniform (PlainWire a)
 
-setAllUniforms :: HasUniforms r => ShaderProgram -> PlainRec r -> PlainWire (IO ())
+setAllUniforms :: HasUniforms r => ShaderProgram -> PlainRec r -> PlainWire DrawFun
 setAllUniforms shdr record = setUniforms (uniforms shdr) record
 
 type UnifMap = M.Map String (GL.UniformLocation, GL.VariableType)
@@ -29,10 +29,10 @@ type UnifMap = M.Map String (GL.UniformLocation, GL.VariableType)
 -}
 
 class HasUniforms r where
-    setUniforms :: UnifMap -> PlainRec r -> PlainWire (IO ())
+    setUniforms :: UnifMap -> PlainRec r -> PlainWire DrawFun
 
 instance HasUniforms '[] where
-    setUniforms unifs _ | M.null unifs = pure $ GL.activeTexture $= GL.TextureUnit 0
+    setUniforms unifs _ | M.null unifs = pure $ const $ GL.activeTexture $= GL.TextureUnit 0
                         | otherwise = error $ "Uniforms " ++ show (M.keys unifs) ++ " not set"
 
 
@@ -45,13 +45,17 @@ unifLoc name unifs realTy = case M.lookup name unifs of
                                 ++ show ty ++ "'"
 
 --case for regular uniforms
-instance (SingI sy, HasUniforms rest, AsUniform sort, HasVariableType sort)
+instance (SingI sy, HasUniforms rest, AsUniform sort, Fractional sort, HasVariableType sort)
           => HasUniforms (sy ::: Uniform sort ': rest) where
     setUniforms unifs (Identity (Uniform thing) :& rest) =
         proc () -> do
-            val <- thing -< ()
+            val <- delay 0 <<< thing -< ()
+            val' <- thing -< ()
             others <- setUniforms (M.delete name unifs) rest -< ()
-            returnA -< others >> asUniform val (unifLoc name unifs realTy)
+            returnA -< others >>=& \alpha ->
+                --FIXME: lerp is wrong for matricies
+                let blended = val' * realToFrac alpha + val * (1 - realToFrac alpha)
+                in asUniform blended (unifLoc name unifs realTy)
         where name = show (Field :: sy ::: ())
               realTy = variableType (undefined :: sort)
 
@@ -61,7 +65,8 @@ instance (SingI sy, HasUniforms rest)
     setUniforms unifs (Identity tex :& rest) =
         proc () -> do
             others <- setUniforms (M.delete name unifs) rest -< ()
-            returnA -< do others
+            returnA -< \alpha ->
+                       do others alpha
                           GL.textureBinding GL.Texture2D $= Just tex
                           tu@(GL.TextureUnit n) <- GL.get GL.activeTexture
                           GL.uniform (unifLoc name unifs GL.Sampler2D) $= tu

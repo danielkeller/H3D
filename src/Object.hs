@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds #-}
+{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds, Arrows #-}
 module Object (
     Object,
     objRec,
@@ -57,7 +57,7 @@ makeObject verts faces = do
                         GL.deleteObjectNames [indBuf]
                   }
 
-type Obj = "object" ::: Object
+type Obj = "object" ::: Object 
 objRec :: Obj
 objRec = Field
 
@@ -83,5 +83,7 @@ drawObject object = draw =: getMv <+> object
               unifs
               GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
               return (Right ())
-          getMv cam = (mkGen_ doDraw <<< setAllUniforms shdr (withModelView object cam))
-                         >>> sceneRoot (camera =: (cam !*! rGet transform object) <+> object)
+          getMv cam = proc () -> do
+                        unifs <- setAllUniforms shdr (withModelView object cam) -< ()
+                        childs <- sceneRoot (camera =: (cam !*! rGet transform object) <+> object) -< ()
+                        returnA -< doDraw . unifs >>=& childs
