@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 module Window (
     withWindow,
     fbSize
@@ -10,6 +11,8 @@ import Control.Monad
 import Control.Arrow
 import Control.Wire(mkGen_, Timed(..), stepWire)
 import Data.Time
+import Control.Concurrent
+import Control.Concurrent.MVar
 
 import Util
 
@@ -39,13 +42,62 @@ withWindow setup action cleanup =
                                     setWindowSizeCallback wnd (Just resizeCB)
                                     cullFace $= Just Back
                                     depthFunc $= Just Less
-                                    back <- getCurrentTime
-                                    bracket (setup wnd) cleanup (mainLoop wnd back (addUTCTime dt back)
-                                                                          (const (return ())) . action wnd)
+                                    mvdraw <- newEmptyMVar
+                                    accum <- getCurrentTime
+                                    bracket (setup wnd) cleanup (\resources -> do 
+                                        forkOS $ makeContextCurrent w >> drawLoop mvdraw wnd
+                                        physLoop wnd accum mvdraw (action wnd resources)) --has to run in main thread
                                  `finally` destroyWindow wnd
 
-mainLoop :: Window -> UTCTime -> UTCTime -> DrawFun -> PlainWire DrawFun -> IO ()
-mainLoop wnd back -- completed time
+--Function to draw the frame, and time that frame starts
+data DrawData = DrawData DrawFun UTCTime
+
+drawLoop :: MVar DrawData -> Window -> IO ()
+drawLoop mvdraw wnd = do
+    --wait for physics to finish
+    DrawData draw accum <- takeMVar mvdraw
+    let loop = do
+          now <- getCurrentTime
+          let !alpha = realToFrac (diffUTCTime now accum) / dt
+          putStr "draw "
+          print alpha
+          --the current draw action is still fresh
+          when (alpha <= 1) $ do
+              clear [ColorBuffer, DepthBuffer]
+              --draw alpha
+              swapBuffers wnd
+              errs <- get errors
+              unless (null errs) (print errs)
+              loop
+    loop
+    close <- windowShouldClose wnd
+    unless close (drawLoop mvdraw wnd)
+
+--ASCII art code is best code
+physLoop :: Window -> UTCTime -> MVar DrawData -> PlainWire DrawFun -> IO ()
+physLoop wnd accum mvdraw wire = do { {-
++-+ <- accum
+|#|
+|#| )- previous frame physics
+|#|
++-+ -} now <- getCurrentTime;
+       putStr "delay "; print (diffUTCTime accum' now * 1000000); {-
+  | -} when (now < accum') (threadDelay (truncate (diffUTCTime accum' now * 1000000))); {- in usec
+  |    waiting for this frame'e events to happen...
+  |
+  |
++-+ <- accum'
+|#| -} pollEvents; {- at least dt has passed, so get the last dt's worth of events 
+|#| -} (Right !draw, wire') <- stepWire wire (Timed dt ()) (Right ()); putStr "tick ... ";{-
+|#| running this frame's physics sim...
+|#|
+|#| -} putMVar mvdraw (DrawData draw accum'); putStrLn "sent"; {- done, send it over!
++-+ -} physLoop wnd accum' mvdraw wire'; -- loop into next frame
+       } where accum' = addUTCTime dt accum
+
+{-
+physLoop' :: Window -> UTCTime -> UTCTime -> MVar DrawData -> PlainWire DrawFun -> IO ()
+physLoop' wnd back -- completed time
              front -- end of current tick
              draw -- current render action
              wire -- current physics state
@@ -62,9 +114,8 @@ mainLoop wnd back -- completed time
             pollEvents
             (Right draw', wire') <- stepWire wire (Timed dt ()) (Right ())
             let front' = addUTCTime dt back'
-            --putStrLn $ "Sim " ++ show (utctDayTime back') ++ " -> " ++ show (utctDayTime front')
-            mainLoop wnd back' front' draw' wire'
-        --the current draw action is still fresh
+            --putStrLn $ "Sim  " ++ show (utctDayTime back') ++ " -> " ++ show (utctDayTime front')
+            physLoop' wnd back' front' draw' wire'
          | otherwise -> do
             clear [ColorBuffer, DepthBuffer]
             --the alpha is the amount of the physics step we have left to display
@@ -72,7 +123,7 @@ mainLoop wnd back -- completed time
             draw alpha
             swapBuffers wnd
             --putStrLn $ "Draw " ++ show (utctDayTime back') ++ " -> " ++ show (utctDayTime front)
-            mainLoop wnd back' front draw wire
-
+            physLoop wnd back' front draw wire
+-}
 dt :: Fractional a => a
 dt = 0.03

@@ -75,7 +75,7 @@ withModelView object cam = modelView =: Uniform (cam !*! rGet transform object)
                               <+> object
 
 drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainRec (Draw ': r)
-drawObject object = draw =: getMv <+> object
+drawObject object = draw =: drawObj <+> object
     where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec object
           doDraw :: IO () -> IO (Either e ())
           doDraw unifs = withVAO vao $ do
@@ -83,7 +83,7 @@ drawObject object = draw =: getMv <+> object
               unifs
               GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
               return (Right ())
-          getMv cam = proc () -> do
-                        unifs <- setAllUniforms shdr (withModelView object cam) -< ()
-                        childs <- sceneRoot (camera =: (cam !*! rGet transform object) <+> object) -< ()
-                        returnA -< doDraw . unifs >>=& childs
+          drawObj cam = proc () -> do
+                          unifs <- setAllUniforms shdr (withModelView object cam) -< ()
+                          childs <- sceneRoot (camera =: (cam !*! rGet transform object) <+> object) -< ()
+                          returnA -< doDraw . unifs >>=& childs
