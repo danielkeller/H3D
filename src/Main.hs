@@ -34,7 +34,8 @@ main = withWindow setup scene cleanup
     where setup wnd = do GLFW.setKeyCallback wnd (Just keyCB)
                          obj <- loadWavefront "assets/capsule.obj"
                          tex <- fromEither "texture" <$> readTexture "assets/capsule.png"
-                         GL.textureFilter GL.Texture2D GL.$= ((GL.Linear', Nothing), GL.Linear')
+                         generateMipmap' GL.Texture2D
+                         GL.textureFilter GL.Texture2D GL.$= ((GL.Linear', Just GL.Linear'), GL.Linear')
                          return (obj, tex)
           cleanup (obj, _) = freeObject obj
 
