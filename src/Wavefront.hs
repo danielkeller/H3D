@@ -3,7 +3,6 @@ module Wavefront (
     loadWavefront,
 ) where
 
-import Graphics.GLUtil
 import GHC.Float (double2Float)
 import Control.Applicative
 import Data.Attoparsec.ByteString.Char8
@@ -15,16 +14,16 @@ import Linear.Applicative hiding (zero)
 import Linear.GL
 import Linear (zero)
 
+import qualified Math.Mesh as M
 import Object
 import Util
 
 -- the types of information that .obj files support
-type PosRec = PlainRec '["position" ::: Vec4]
 type NormRec = PlainRec '["normal" ::: Vec3]
 type TexRec = PlainRec '["texCoord" ::: Vec2]
 
 -- obj file lines
-data WfLine = V PosRec | VN NormRec | VT TexRec | F (V.Vector Word32)
+data WfLine = V (PlainRec '[Pos]) | VN NormRec | VT TexRec | F M.TriInd
             -- | MtlLib String | UseMtl String
             | Junk
 
@@ -35,7 +34,7 @@ loadWavefront file = do
         vns = [r | VN r <- recs] ++ repeat (Field =: zero)
         vts = [r | VT r <- recs] ++ repeat (Field =: zero)
         verts = zipWith (<+>) (zipWith (<+>) vs vns) vts
-    makeObject (V.fromList verts) $ V.concat [f | F f <- recs]
+    makeObject (V.fromList verts) $ V.fromList [f | F f <- recs]
 
 parseObj :: Parser [WfLine]
 parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm) <|> (VT <$> parseTex)
@@ -45,12 +44,12 @@ parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm)
                                  else fail (show (B.take 20 rest))
 
      where
-        parseFace = "f " .*> thenDec <*> (thenDec <*> (thenDec <*> return V.empty))
-            where thenDec = (V.cons . (subtract 1) <$> decimal) <* skipWhile (not . isSpace) <* skipSpace
+        parseFace = "f " .*> (M.TriInd <$> thenDec <*> thenDec <*> thenDec)
+            where thenDec = (subtract 1 <$> decimal) <* skipWhile (not . isSpace) <* skipSpace
 
         thenFloat = CFloat . double2Float <$> (double <* skipSpace)
 
-        parseVert = (Field =:) <$> "v " .*> (vec4 thenFloat thenFloat thenFloat (return 1))
+        parseVert = (Field =:) <$> "v " .*> (vec3 thenFloat thenFloat thenFloat)
         parseNorm = (Field =:) <$> "vn " .*> (vec3 thenFloat thenFloat thenFloat)
         parseTex = (Field =:) <$> "vt " .*> (vec2 thenFloat thenFloat)
 

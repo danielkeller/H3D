@@ -1,6 +1,6 @@
 #version 330
 
-in vec4 position;
+in vec3 position;
 in vec2 texCoord;
 in vec3 normal;
 
@@ -11,7 +11,7 @@ uniform mat4x4 modelView;
 
 void main()
 {
-    gl_Position = modelView * position;
+    gl_Position = modelView * vec4(position, 1);
     texCoordFrag = texCoord;
     normalFrag = normal;
 }

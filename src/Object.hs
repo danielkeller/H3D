@@ -1,7 +1,8 @@
 {-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds, Arrows #-}
 module Object (
+    Pos, Mesh(..),
     Object,
-    objRec,
+    Obj, objRec,
     child,
     draw,
     Uniform(..),
@@ -10,7 +11,7 @@ module Object (
     makeObject
 ) where
 
-import Prelude hiding ((.))
+import Prelude hiding ((.), foldr)
 
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
@@ -28,8 +29,13 @@ import Control.Wire hiding ((<+>))
 import Util
 import Uniforms
 import Scene
+import Math.Mesh
 
-data Object = Object { objVAO :: GL.VertexArrayObject
+--this is getting kind of messy
+type Pos = "position" ::: Vec3
+
+data Object = Object { objMesh :: Mesh
+                     , objVAO :: GL.VertexArrayObject
                      , objNumIndices :: GL.GLint
                      , freeObject :: IO ()
                      , objShader :: ShaderProgram
@@ -38,24 +44,28 @@ data Object = Object { objVAO :: GL.VertexArrayObject
 type ViableVertex t = (HasFieldNames t, HasFieldSizes t, HasFieldDims t,
                        HasFieldGLTypes t, V.Storable t)
 
-makeObject :: (ViableVertex (PlainRec rs), BufferSource (V.Vector (PlainRec rs)))
-              => V.Vector (PlainRec rs) -> V.Vector Word32 -> IO Object
+makeObject :: (ViableVertex (PlainRec rs), BufferSource (V.Vector (PlainRec rs)), Pos `IElem` rs)
+              => V.Vector (PlainRec rs) -> V.Vector TriInd -> IO Object
 makeObject verts faces = do
     vertBuf <- bufferVertices verts
-    indBuf <- bufferIndices faces
+    indBuf <- bufferIndices faceWords
     shdr <- simpleShaderProgram "assets/simple.vert" "assets/simple.frag"
     vao <- makeVAO $ do
         enableVertices' shdr vertBuf
         bindVertices vertBuf
         GL.bindBuffer GL.ElementArrayBuffer $= Just indBuf
-    return Object { objVAO = vao
-                  , objNumIndices = fromIntegral (V.length faces)
+    return Object { objMesh = mesh
+                  , objVAO = vao
+                  , objNumIndices = fromIntegral (V.length faceWords)
                   , objShader = shdr
                   , freeObject = do
                         GL.deleteObjectNames [vao]
                         deleteVertices vertBuf
                         GL.deleteObjectNames [indBuf]
                   }
+    where mesh = Mesh (V.map (rGet (Field :: Pos)) verts) faces
+          faceWords :: V.Vector Word32
+          faceWords = V.unsafeCast faces
 
 type Obj = "object" ::: Object 
 objRec :: Obj
