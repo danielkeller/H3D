@@ -9,7 +9,8 @@ module Uniforms (
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
 import Data.Vinyl
-import Control.Wire hiding ((<+>))
+import Data.Vinyl.Idiom.Identity
+import Control.Wire hiding ((<+>), Identity)
 import Graphics.GLUtil
 import GHC.TypeLits (SingI)
 import qualified Data.Map as M
