@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 module Math.Shapes (
     -- shapes
-    Tri(..), Box,
+    Tri(..), Box(..),
     -- collision
     Collide(), intersects,
     -- rando operations
@@ -15,9 +15,9 @@ import Control.Lens.Getter ((^.))
 -- | Pattern match convention: (Tri q r s)
 data Tri = Tri Vec3 Vec3 Vec3
 
--- | Pattern match convention: (V2 a b)
---Box (V2 a b) is bounded on the interval [a, b)
-type Box = V2 Vec3 --i'm pretty sure this is right
+-- | Pattern match convention: (Box a b)
+-- (Box a b) is bounded on the interval [a, b)
+data Box = Box Vec3 Vec3 --i'm pretty sure this is right
 
 --TODO: Do we need a line segment type that specifies openness and closedness?
 --TODO: Should axes return self-projections as an optimization?
@@ -40,8 +40,8 @@ intersects a b = isOverlap `all` axs
 
 --this kind of crap would likely be better if I were using Vec...
 boxIntersect :: Box -> Box -> Box
-boxIntersect (V2 (V3 lx ly lz) (V3 hx hy hz)) (V2 (V3 lx' ly' lz') (V3 hx' hy' hz')) =
-    (V2 (V3 (max lx lx') (max ly ly') (max lz lz')) (V3 (min hx hx') (min hy hy') (min hz hz')))
+boxIntersect (Box (V3 lx ly lz) (V3 hx hy hz)) (Box (V3 lx' ly' lz') (V3 hx' hy' hz')) =
+    (Box (V3 (max lx lx') (max ly ly') (max lz lz')) (V3 (min hx hx') (min hy hy') (min hz hz')))
 
 centroid :: Tri -> Vec3
 centroid (Tri a b c) = (a ^+^ b ^+^ c) ^/ 3
@@ -64,7 +64,7 @@ instance Collide Tri where
 
 instance Collide Box where
     axes _ = basis --it's axis aligned!
-    project (V2 a b) ax@(V3 x y z) = (c `dot` ax, d `dot` ax)
+    project (Box a b) ax@(V3 x y z) = (c `dot` ax, d `dot` ax)
         --there are 4 possible pairs of point depending on the direction of ax
               --partially apply just x and y to the constructor in c' and d'
         where (c', d') | x*y > 0 = (V3 (a^._x) (a^._y), V3 (b^._x) (b^._y)) --same x and y

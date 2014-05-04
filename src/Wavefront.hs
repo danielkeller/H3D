@@ -8,7 +8,6 @@ import Control.Applicative
 import Data.Attoparsec.ByteString.Char8
 import qualified Data.ByteString.Char8 as B
 import qualified Data.Vector.Storable as V
-import Foreign.C.Types(CFloat(..))
 import Data.Vinyl
 import Linear.Applicative hiding (zero)
 import Linear.GL

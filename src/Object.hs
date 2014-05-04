@@ -2,10 +2,12 @@
 module Object (
     Pos, Mesh(..),
     Object,
+    objMesh,
     Obj, objRec,
     child,
     draw,
     Uniform(..),
+    Draw,
     drawObject,
     freeObject,
     makeObject

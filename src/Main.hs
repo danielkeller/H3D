@@ -18,7 +18,7 @@ import Object
 import Scene
 import Wavefront
 import Util
-import Math.BVH
+import Collision
 
 keyCB :: GLFW.KeyCallback
 keyCB wnd GLFW.Key'Escape _ _ _ = GLFW.setWindowShouldClose wnd True
