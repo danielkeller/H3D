@@ -40,6 +40,8 @@ main = withWindow setup scene cleanup
                          return (obj, tex)
           cleanup (obj, _) = freeObject obj
 
+--fix the one-time-IO problm by having a setup record that starts as return () and gets added to
+
 scene :: GLFW.Window -> (Object, GL.TextureObject) -> PlainWire (Float -> IO ())
 scene wnd (obj, tex) = sceneRoot $
     camera =: (defaultPerspective wnd !*! camLoc) <+>

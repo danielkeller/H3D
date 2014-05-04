@@ -23,6 +23,7 @@ meanCentroid :: M.Mesh -> Vec3
 meanCentroid m = M.foldl addcentr 0 m ^/ fromIntegral (M.length m)
     where addcentr c tr = c ^+^ centroid tr
 
+--the best axis is actually the one with the widest distribution
 longestAxis :: Box -> E V3
 longestAxis (Box a b) = maximumBy longer [ex, ey, ez]
     where longer (E ax) (E ax') = compare (b^.ax - a^.ax) (b^.ax' - a^.ax')

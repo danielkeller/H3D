@@ -8,6 +8,7 @@ module Object (
     draw,
     Uniform(..),
     Draw,
+    PrimitiveMode(..),
     drawObject,
     freeObject,
     makeObject
@@ -16,6 +17,7 @@ module Object (
 import Prelude hiding ((.), foldr)
 
 import qualified Graphics.Rendering.OpenGL as GL
+import Graphics.Rendering.OpenGL(PrimitiveMode)
 import Graphics.Rendering.OpenGL (($=))
 import Graphics.GLUtil
 import Data.Vinyl
@@ -38,6 +40,7 @@ type Pos = "position" ::: Vec3
 
 data Object = Object { objMesh :: Mesh
                      , objVAO :: GL.VertexArrayObject
+                     , objMode :: GL.PrimitiveMode
                      , objNumIndices :: GL.GLint
                      , freeObject :: IO ()
                      , objShader :: ShaderProgram
@@ -47,8 +50,8 @@ type ViableVertex t = (HasFieldNames t, HasFieldSizes t, HasFieldDims t,
                        HasFieldGLTypes t, V.Storable t)
 
 makeObject :: (ViableVertex (PlainRec rs), BufferSource (V.Vector (PlainRec rs)), Pos `IElem` rs)
-              => V.Vector (PlainRec rs) -> V.Vector TriInd -> IO Object
-makeObject verts faces = do
+              => V.Vector (PlainRec rs) -> V.Vector TriInd -> GL.PrimitiveMode -> IO Object
+makeObject verts faces mode = do
     vertBuf <- bufferVertices verts
     indBuf <- bufferIndices faceWords
     shdr <- simpleShaderProgram "assets/simple.vert" "assets/simple.frag"
@@ -58,6 +61,7 @@ makeObject verts faces = do
         GL.bindBuffer GL.ElementArrayBuffer $= Just indBuf
     return Object { objMesh = mesh
                   , objVAO = vao
+                  , objMode = mode
                   , objNumIndices = fromIntegral (V.length faceWords)
                   , objShader = shdr
                   , freeObject = do
@@ -88,12 +92,12 @@ withModelView object cam = modelView =: Uniform (cam !*! rGet transform object)
 
 drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainRec (Draw ': r)
 drawObject object = draw =: getMv <+> object
-    where Object {objVAO = vao, objNumIndices = inds, objShader = shdr} = rGet objRec object
+    where Object {objVAO = vao, objMode = mode, objNumIndices = inds, objShader = shdr} = rGet objRec object
           doDraw :: IO () -> IO (Either e ())
           doDraw unifs = withVAO vao $ do
               GL.currentProgram $= Just (program shdr)
               unifs
-              GL.drawElements GL.Triangles inds GL.UnsignedInt nullPtr
+              GL.drawElements mode inds GL.UnsignedInt nullPtr
               return (Right ())
           getMv cam = proc () -> do
                         unifs <- setAllUniforms shdr (withModelView object cam) -< ()

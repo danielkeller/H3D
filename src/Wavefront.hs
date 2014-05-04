@@ -33,7 +33,7 @@ loadWavefront file = do
         vns = [r | VN r <- recs] ++ repeat (Field =: zero)
         vts = [r | VT r <- recs] ++ repeat (Field =: zero)
         verts = zipWith (<+>) (zipWith (<+>) vs vns) vts
-    makeObject (V.fromList verts) $ V.fromList [f | F f <- recs]
+    makeObject (V.fromList verts) (V.fromList [f | F f <- recs]) Triangles
 
 parseObj :: Parser [WfLine]
 parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm) <|> (VT <$> parseTex)
