@@ -1,13 +1,12 @@
-{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds, Arrows #-}
+{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, ConstraintKinds, Arrows, ScopedTypeVariables #-}
 module Object (
     Pos, Mesh(..),
     Object,
     objMesh,
     Obj, objRec,
-    child,
     draw,
     Uniform(..),
-    Draw,
+    Drawable, Draw,
     PrimitiveMode(..),
     drawObject,
     freeObject,
@@ -24,7 +23,7 @@ import Data.Vinyl
 import Data.Vinyl.Reflect
 import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
-import Linear.Applicative
+import Linear
 import Linear.GL
 import Foreign.Ptr(nullPtr)
 
@@ -77,29 +76,13 @@ type Obj = "object" ::: Object
 objRec :: Obj
 objRec = Field
 
-child :: (HasUniforms r, Drawable r) => PlainRec r -> PlainRec '[Draw]
-child = cast . drawObject
+type Drawable = '[Camera, Transform, Obj, Children, UnifSetter]
 
-type Drawable r = (Transform `IElem` r, Obj `IElem` r, Children `IElem` r)
-
-type ModelView = "modelView" ::: Uniform Mat4
-modelView :: ModelView
-modelView = Field
-
-withModelView :: (Drawable r) => PlainRec r -> PlainWire Mat4 -> PlainRec (ModelView ': r)
-withModelView object cam = modelView =: Uniform (cam !*! rGet transform object)
-                              <+> object
-
-drawObject :: (HasUniforms r, Drawable r) => PlainRec r -> PlainRec (Draw ': r)
-drawObject object = draw =: getMv <+> object
-    where Object {objVAO = vao, objMode = mode, objNumIndices = inds, objShader = shdr} = rGet objRec object
-          doDraw :: IO () -> IO (Either e ())
-          doDraw unifs = withVAO vao $ do
+drawObject :: Component Drawable '[Draw]
+drawObject = arr ((draw =:) . doDraw)
+    where doDraw object alpha = withVAO vao $ do
+              --rGet drawScene object alpha
               GL.currentProgram $= Just (program shdr)
-              unifs
+              rGet unifSetter object shdr alpha
               GL.drawElements mode inds GL.UnsignedInt nullPtr
-              return (Right ())
-          getMv cam = proc () -> do
-                        unifs <- setAllUniforms shdr (withModelView object cam) -< ()
-                        childs <- sceneRoot (camera =: (cam !*! rGet transform object) <+> object) -< ()
-                        returnA -< doDraw . unifs >>=& childs
+              where Object {objVAO = vao, objMode = mode, objNumIndices = inds, objShader = shdr} = rGet objRec object

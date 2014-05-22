@@ -1,10 +1,15 @@
 {-# LANGUAGE FlexibleInstances, OverlappingInstances, Arrows,
     DataKinds, TypeOperators, GADTs, ScopedTypeVariables #-}
+-- | This module is neccesary because vinyl-gl's setAllUniforms
+-- barfs if something in the record doesn't have a gl type
 module Uniforms (
     HasUniforms(..),
     setAllUniforms,
-    Uniform(..)
+    Uniform(..),
+    UnifSetter, unifSetter
 ) where
+
+import Prelude hiding (id, (.))
 
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL (($=))
@@ -17,10 +22,16 @@ import qualified Data.Map as M
 
 import Util
 
-newtype Uniform a = Uniform (PlainWire a)
+newtype Uniform a = Uniform {unUnif :: a}
 
-setAllUniforms :: HasUniforms r => ShaderProgram -> PlainRec r -> PlainWire DrawFun
-setAllUniforms shdr record = setUniforms (uniforms shdr) record
+type UnifSetter = "setUnifs" ::: (ShaderProgram -> DrawFun)
+unifSetter :: UnifSetter
+unifSetter = Field
+
+setAllUniforms :: HasUniforms r => Component r '[UnifSetter]
+setAllUniforms = arr ((unifSetter =:) . (.uniforms) --convert the ShaderProgram to a UnifMap
+                      . uncurry setUniforms) --just the first two arguments
+               . (id &&& delay undefined)
 
 type UnifMap = M.Map String (GL.UniformLocation, GL.VariableType)
 
@@ -30,11 +41,14 @@ type UnifMap = M.Map String (GL.UniformLocation, GL.VariableType)
 -}
 
 class HasUniforms r where
-    setUniforms :: UnifMap -> PlainRec r -> PlainWire DrawFun
+    setUniforms :: PlainRec r -- ^ Current uniforms
+                -> PlainRec r -- ^ Last uniforms
+                -> UnifMap -- ^ Uniform locations
+                -> DrawFun
 
 instance HasUniforms '[] where
-    setUniforms unifs _ | M.null unifs = pure $ const $ GL.activeTexture $= GL.TextureUnit 0
-                        | otherwise = error $ "Uniforms " ++ show (M.keys unifs) ++ " not set"
+    setUniforms _ _ unifs _ | M.null unifs = GL.activeTexture $= GL.TextureUnit 0
+                            | otherwise = error $ "Uniforms " ++ show (M.keys unifs) ++ " not set"
 
 
 unifLoc :: String -> UnifMap -> GL.VariableType -> GL.UniformLocation
@@ -48,31 +62,26 @@ unifLoc name unifs realTy = case M.lookup name unifs of
 --case for regular uniforms
 instance (SingI sy, HasUniforms rest, AsUniform sort, Fractional sort, HasVariableType sort)
           => HasUniforms (sy ::: Uniform sort ': rest) where
-    setUniforms unifs (Identity (Uniform thing) :& rest) =
-        proc () -> do
-            val <- delay 0 <<< thing -< ()
-            val' <- thing -< ()
-            others <- setUniforms (M.delete name unifs) rest -< ()
-            returnA -< others >>=& \alpha ->
-                --FIXME: lerp is wrong for matricies
-                let blended = val' * realToFrac alpha + val * (1 - realToFrac alpha)
-                in asUniform blended (unifLoc name unifs realTy)
+    setUniforms (Identity (Uniform val) :& rest)
+                (Identity (Uniform val') :& rest') unifs alpha = do
+          setUniforms rest rest' (M.delete name unifs) alpha
+          --FIXME: lerp is wrong for matricies
+          let blended = val' * (1 - realToFrac alpha) + val * realToFrac alpha
+          asUniform blended (unifLoc name unifs realTy)
         where name = show (Field :: sy ::: ())
               realTy = variableType (undefined :: sort)
 
 --case for textures
 instance (SingI sy, HasUniforms rest)
           => HasUniforms (sy ::: GL.TextureObject ': rest) where
-    setUniforms unifs (Identity tex :& rest) =
-        proc () -> do
-            others <- setUniforms (M.delete name unifs) rest -< ()
-            returnA -< \alpha ->
-                       do others alpha
-                          GL.textureBinding GL.Texture2D $= Just tex
-                          tu@(GL.TextureUnit n) <- GL.get GL.activeTexture
-                          GL.uniform (unifLoc name unifs GL.Sampler2D) $= tu
-                          GL.activeTexture $= GL.TextureUnit (n + 1)
+    setUniforms (Identity tex :& rest) (_ :& rest') unifs alpha = do
+            setUniforms rest rest' (M.delete name unifs) alpha
+            GL.textureBinding GL.Texture2D $= Just tex
+            tu@(GL.TextureUnit n) <- GL.get GL.activeTexture
+            GL.uniform (unifLoc name unifs GL.Sampler2D) $= tu
+            GL.activeTexture $= GL.TextureUnit (n + 1)
         where name = show (Field :: sy ::: ())
 
 instance HasUniforms rest => HasUniforms (thing ': rest) where
-    setUniforms unifs (_ :& rest) = setUniforms unifs rest
+    setUniforms (_ :& rest) (_ :& rest') unifs =
+        setUniforms rest rest' unifs

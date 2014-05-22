@@ -6,7 +6,6 @@ module Collision (
 
 import Data.Vinyl
 import Math.BVH
-import qualified Data.Vector.Storable as V
 import Object
 
 type BVH = "BVH" ::: AABB

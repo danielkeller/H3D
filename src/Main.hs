@@ -1,17 +1,19 @@
-{-# LANGUAGE DataKinds, TypeOperators #-}
+{-# LANGUAGE DataKinds, TypeOperators, ScopedTypeVariables, FlexibleContexts, GADTs #-}
 module Main (
 	main
 ) where
 
-import Prelude hiding ((.))
+import Prelude hiding ((.), id)
 
 import qualified Graphics.Rendering.OpenGL as GL
 import qualified Graphics.UI.GLFW as GLFW
 import Graphics.GLUtil
-import Linear.Applicative
+import Linear.Applicative(perspective, rotation)
+import Linear
 import Linear.GL
 import Data.Vinyl
-import Control.Wire hiding ((<+>))
+import Control.Wire hiding ((<+>), Identity)
+import Data.Traversable (sequenceA)
 
 import Window
 import Object
@@ -19,6 +21,7 @@ import Scene
 import Wavefront
 import Util
 import Collision
+import Uniforms
 
 keyCB :: GLFW.KeyCallback
 keyCB wnd GLFW.Key'Escape _ _ _ = GLFW.setWindowShouldClose wnd True
@@ -40,35 +43,47 @@ main = withWindow setup scene cleanup
                          return (obj, tex)
           cleanup (obj, _) = freeObject obj
 
---fix the one-time-IO problm by having a setup record that starts as return () and gets added to
+scene :: GLFW.Window -> (Object, GL.TextureObject) -> Component '[] '[DrawScene]
+scene wnd (obj, tex) = arr cast <<< inline (sceneRoot [child object1]) <<<
+                                    inline (defaultCamera wnd) <<<
+                                    polyInline (pure (transform =: camLoc)) <<<
+                                    defaultObject
+    
+    where 
+      camLoc = mkTransformationMat eye3 (V3 0 0 (-3))
+      simpleObject = pure $ objRec =: obj <+> texture =: tex
+      object1 = inline spinaround <<< inline defaultObject <<< simpleObject
+      spinaround :: Component '[] '[Transform]
+      spinaround = arr move'n'scale <<< rotation timeF
+      move'n'scale mat = transform =: (mat !*! mkTransformationMat eye3 (V3 0 0 0)
+                                           !*! mkTransformationMat (eye3 !!* 0.5) (V3 0 0 0))
 
-scene :: GLFW.Window -> (Object, GL.TextureObject) -> PlainWire (Float -> IO ())
-scene wnd (obj, tex) = sceneRoot $
-    camera =: (defaultPerspective wnd !*! camLoc) <+>
-    children =: [
-        child $ simpleObject <+>
-        transform =: eye4 <+>
-        children =: [
-            child $ simpleObject <+>
-            transform =: spinaround <+>
-            children =: [
-                child $ simpleObject <+>
-                transform =: spinaround2 <+>
-                children =: []
-            ],
-            child $ simpleObject <+>
-            transform =: spinaround2 <+>
-            children =: []
-        ]
-    ]
-    where camLoc = mkTransformationMat eye3 (vec3 0 0 (-6))
-          spinaround = rotation timeF
-                       !*! mkTransformationMat eye3 (vec3 3 0 0)
-                       !*! scale 0.5
-          spinaround2 = rotation (3 * timeF)
-                       !*! mkTransformationMat eye3 (vec3 2 0 0)
-                       !*! scale 0.5
-          simpleObject = objRec =: obj <+> texture =: tex
+defaultTransform :: Component '[] '[Transform]
+defaultTransform = pure (transform =: eye4)
 
-defaultPerspective :: GLFW.Window -> PlainWire Mat4
-defaultPerspective wnd = perspective 0.1 100 (pi/2) . uncurry (/) <$> fbSize wnd
+--sceenRoot' :: [Entity () '[Draw]] -> 
+
+-- |replace the modelview with one relative to this object's location
+withModelView :: Component '[Transform, Camera] '[ModelView]
+withModelView = arr $ \object -> modelView =: Uniform (rGet camera object !*! rGet transform object)
+
+child :: (Transform `IElem` atts, Obj `IElem` atts, Children `IElem` atts, HasUniforms atts) => 
+          Component '[] (atts) ->
+          Component '[Camera] '[Draw]
+child obj = drawObject <<< arr cast <<< polyInline setAllUniforms <<< inline withModelView <<< mergeCamera obj
+
+mergeCamera :: Component '[] outs -> Component '[Camera] (Camera ': outs)
+mergeCamera obj = id &&& (arr cast >>> obj) >>> arr (uncurry (<+>))
+
+--just rename ModelView to Camera
+subScene :: Component '[ModelView] '[Camera]
+subScene = arr (\(Identity (Uniform mv) :& RNil) -> camera =: mv)
+
+sceneRoot :: [Component '[Camera] '[Draw]]
+              -> Component '[Transform, Camera] '[DrawScene]
+sceneRoot cs = arr combine <<< arr (map (rGet draw)) <<< sequenceA cs <<< subScene <<< withModelView
+    where combine draws = drawScene =: (\alpha -> sequence_ (draws <*> pure alpha))
+
+defaultCamera :: GLFW.Window -> Component '[] '[Camera]
+defaultCamera wnd = (camera =:) <$> defaultPerspective <<< pure () --hack
+    where defaultPerspective = perspective 0.1 100 (pi/2) . uncurry (/) <$> fbSize wnd
