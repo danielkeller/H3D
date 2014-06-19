@@ -28,16 +28,9 @@ fromEither :: String -> Either String b -> b
 fromEither message (Left err) = error $ message ++ ": " ++ err
 fromEither _ (Right res) = res
 
--- entities might be useless?
-type Entity inputs attributes = PlainWire inputs (PlainRec attributes)
 type Component dependencies outputs = PlainWire (PlainRec dependencies) (PlainRec outputs)
 
--- | This function adds a component to an entity, provided its dependencies are met
-augment :: (PlainRec attributes <: PlainRec dependencies) =>
-              Component dependencies outputs -- ^ component
-           -> Entity inputs attributes -- ^ initial entity
-           -> Entity inputs (outputs ++ attributes) -- ^ augmented entity
-augment component entity = entity >>> inline component
+--it's kind of annoying to call this all the time...
 
 -- | Combines components into bigger ones
 inline :: (PlainRec attributes <: PlainRec dependencies) =>

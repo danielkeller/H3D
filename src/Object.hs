@@ -10,10 +10,11 @@ module Object (
     PrimitiveMode(..),
     drawObject,
     freeObject,
-    makeObject
+    makeObject,
+    child
 ) where
 
-import Prelude hiding ((.), foldr)
+import Prelude hiding ((.), foldr, id)
 
 import qualified Graphics.Rendering.OpenGL as GL
 import Graphics.Rendering.OpenGL(PrimitiveMode)
@@ -23,7 +24,6 @@ import Data.Vinyl
 import Data.Vinyl.Reflect
 import Graphics.VinylGL hiding (setAllUniforms)
 import qualified Data.Vector.Storable as V
-import Linear
 import Linear.GL
 import Foreign.Ptr(nullPtr)
 
@@ -76,13 +76,21 @@ type Obj = "object" ::: Object
 objRec :: Obj
 objRec = Field
 
-type Drawable = '[Camera, Transform, Obj, Children, UnifSetter]
+type Drawable = '[Camera, Transform, Obj, DrawScene, UnifSetter]
 
 drawObject :: Component Drawable '[Draw]
 drawObject = arr ((draw =:) . doDraw)
-    where doDraw object alpha = withVAO vao $ do
-              --rGet drawScene object alpha
+    where doDraw object alpha = do
+            rGet drawScene object alpha
+            withVAO vao $ do
               GL.currentProgram $= Just (program shdr)
               rGet unifSetter object shdr alpha
               GL.drawElements mode inds GL.UnsignedInt nullPtr
-              where Object {objVAO = vao, objMode = mode, objNumIndices = inds, objShader = shdr} = rGet objRec object
+            where Object {objVAO = vao, objMode = mode, objNumIndices = inds, objShader = shdr} = rGet objRec object
+
+-- | collapse an object's type so it can be put in a list and sent to 'sceneRoot'
+child :: (Transform `IElem` atts, Obj `IElem` atts, DrawScene `IElem` atts, HasUniforms atts) => 
+          Component '[Camera] atts ->
+          Component '[Camera] '[Draw]
+child obj = drawObject <<< arr cast <<< polyInline setAllUniforms <<< inline withModelView <<< mergedCamera
+    where mergedCamera = id &&& obj >>> arr (uncurry (<+>)) --get rid of this?

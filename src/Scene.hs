@@ -1,18 +1,19 @@
 {-# LANGUAGE DataKinds, TypeOperators, ConstraintKinds, FlexibleContexts, Arrows, GADTs #-}
 module Scene (
     Transform, transform,
-    Children, children,
     Draw, draw,
     ModelView, modelView,
     Camera, camera,
-    defaultObject,
 
     DrawScene, drawScene,
+    withModelView, sceneRoot
 ) where
 
 import Data.Vinyl
+import Linear
 import Linear.GL
 import Control.Wire hiding ((<+>), (.), Identity)
+import Data.Traversable (sequenceA)
 
 import Util
 import Uniforms
@@ -26,11 +27,8 @@ drawScene :: DrawScene
 drawScene = Field
 
 type Transform = "transform" ::: Mat4
-type Children = "children" ::: DrawFun
 transform :: Transform
 transform = Field
-children :: Children
-children = Field
 
 type Camera = "camera" ::: Mat4
 camera :: Camera
@@ -40,12 +38,14 @@ type ModelView = "modelView" ::: Uniform Mat4
 modelView :: ModelView
 modelView = Field
 
-{-
-sceneRoot :: Component '[ModelView, Children] '[DrawScene]
-sceneRoot = arr $ \(Identity (Uniform mv) :& Identity childs :& RNil) ->
-                    let drawFuns = childs <*> pure mv
-                    in  drawScene =: (sequence_ . (<*>) drawFuns . pure)
--}
--- and other stuff, eventually
-defaultObject :: Component '[] '[Children]
-defaultObject = pure (children =: const (return ()))
+-- | replace the modelview with one relative to this object's location
+withModelView :: Component '[Transform, Camera] '[ModelView]
+withModelView = arr $ \object -> modelView =: Uniform (rGet camera object !*! rGet transform object)
+
+-- | draw all children
+sceneRoot :: [Component '[Camera] '[Draw]]
+              -> Component '[Transform, Camera] '[DrawScene]
+sceneRoot cs = arr combine <<< arr (map (rGet draw)) <<< sequenceA cs <<< subScene <<< withModelView
+    where combine draws = drawScene =: (\alpha -> sequence_ (draws <*> pure alpha))
+          subScene :: Component '[ModelView] '[Camera]
+          subScene = arr (\(Identity (Uniform mv) :& RNil) -> camera =: mv)

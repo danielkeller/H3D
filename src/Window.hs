@@ -35,7 +35,7 @@ withWindow setup action cleanup =
        when res run
     `finally` terminate
     where run =
-              do w <- createWindow 1024 768 "Hello Triangle" Nothing Nothing
+              do w <- createWindow 1024 768 "λ 3D" Nothing Nothing
                  case w of
                      Nothing -> return ()
                      Just wnd -> do makeContextCurrent w
