@@ -41,24 +41,21 @@ main = withWindow setup scene cleanup
           cleanup (obj, _) = freeObject obj
 
 scene :: GLFW.Window -> (Object, GL.TextureObject) -> Component '[] '[DrawScene]
-scene wnd (obj, tex) = arr cast <<< inline (sceneRoot [child object1]) <<<
-                                    inline (defaultCamera wnd) <<<
-                                    polyInline (pure (transform =: camLoc))
+scene wnd (obj, tex) = arr cast <<< sceneRoot [child object1] <<<<
+                                    defaultCamera wnd <<<<
+                                    transform =:< camLoc
     
     where 
       camLoc = mkTransformationMat eye3 (V3 0 0 (-3))
-      simpleObject :: Component '[] '[Obj, "tex" ::: GL.TextureObject]
-      simpleObject = pure $ objRec =: obj <+> texture =: tex
-      object1 = inline (sceneRoot [child object2]) <<< inline spinaround <<< inline simpleObject
-      object2 = inline (sceneRoot []) <<< inline spinaround2 <<< inline simpleObject
-      spinaround :: Component '[] '[Transform]
-      spinaround = arr move'n'scale <<< rotation timeF
-      spinaround2 :: Component '[] '[Transform]
-      spinaround2 = arr move'n'scale2 <<< flip mkTransformation 0 <$> axisAngle (V3 1 0 0) <$> 2 * timeF
+      simpleObject = objRec =:< obj <<<< texture =:< tex <<<< id --this is the least grungy, but grungy nonetheless
+      object1 = sceneRoot [child object2] <<<< spinaround <<<< simpleObject
+      object2 = sceneRoot [] <<<< spinaround2 <<<< simpleObject
+      spinaround = arr move'n'scale <<< rotation timeF <<< void
+      spinaround2 = arr move'n'scale2 <<< flip mkTransformation 0 <$> axisAngle (V3 1 0 0) <$> 2 * timeF <<< void
       move'n'scale mat = transform =: (mat !*! mkTransformationMat eye3 (V3 0 0 0)
                                            !*! mkTransformationMat (eye3 !!* 0.5) (V3 0 0 0))
-      move'n'scale2 mat = fixRecord $ transform =: (mat !*! mkTransformationMat eye3 (V3 0 0 2)
-                                                        !*! mkTransformationMat (eye3 !!* 0.5) (V3 0 0 0))
+      move'n'scale2 mat = transform =: (mat !*! mkTransformationMat eye3 (V3 0 0 2)
+                                            !*! mkTransformationMat (eye3 !!* 0.5) (V3 0 0 0))
 
 defaultCamera :: GLFW.Window -> Component '[] '[Camera]
 defaultCamera wnd = (camera =:) <$> defaultPerspective <<< pure () --hack
