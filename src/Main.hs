@@ -37,20 +37,27 @@ main = withWindow setup scene cleanup
                          tex <- fromEither "texture" <$> readTexture "assets/capsule.png"
                          generateMipmap' GL.Texture2D
                          GL.textureFilter GL.Texture2D GL.$= ((GL.Linear', Just GL.Linear'), GL.Linear')
-                         return (obj, tex)
-          cleanup (obj, _) = freeObject obj
+                         let aabb = buildBVH (objMesh obj)
+                         bvhObj <- simpleShaderProgram "assets/color.vert" "assets/color.frag"
+                                      >>= makeWireframe (bvhWireframe aabb)
+                         return (obj, tex, bvhObj)
+          cleanup (obj, _, bvhObj) = freeObject obj >> freeObject bvhObj
 
-scene :: GLFW.Window -> (Object, GL.TextureObject) -> Component '[] '[DrawScene]
-scene wnd (obj, tex) = arr cast <<< sceneRoot [child object1] <<<<
+scene :: GLFW.Window -> (Object, GL.TextureObject, Object) -> Component '[] '[DrawScene]
+scene wnd (obj, tex, bvhObj) = arr cast <<< sceneRoot [child object1, child bvhObject1] <<<<
                                     defaultCamera wnd <<<<
                                     transform =:< camLoc
     
     where 
-      camLoc = mkTransformationMat eye3 (V3 0 0 (-3))
-      simpleObject = objRec =:< obj <<<< texture =:< tex <<<< id --this is the least grungy, but grungy nonetheless
+      camLoc = mkTransformationMat eye3 (V3 0 0 (-2))
+      --this is the least grungy, but grungy nonetheless
+      simpleObject = {-withBVH <<<< -} objRec =:< obj <<<< texture =:< tex <<<< id
+      bvhObject = {-withBVH <<<< -} objRec =:< bvhObj <<<< id
+      -- drawBVHOf (arr cast <<< object2) -- broken
       object1 = sceneRoot [child object2] <<<< spinaround <<<< simpleObject
       object2 = sceneRoot [] <<<< spinaround2 <<<< simpleObject
-      spinaround = arr move'n'scale <<< rotation timeF <<< void
+      bvhObject1 = sceneRoot [] <<<< spinaround <<<< bvhObject
+      spinaround = arr move'n'scale <<< rotation (timeF / 2) <<< void
       spinaround2 = arr move'n'scale2 <<< flip mkTransformation 0 <$> axisAngle (V3 1 0 0) <$> 2 * timeF <<< void
       move'n'scale mat = transform =: (mat !*! mkTransformationMat eye3 (V3 0 0 0)
                                            !*! mkTransformationMat (eye3 !!* 0.5) (V3 0 0 0))

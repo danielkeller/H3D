@@ -8,9 +8,10 @@ module Util (
     Identity(..),
     Component,
     void,
+    keep,
     (>>>>), (<<<<), (&&&&),
     inline, polyInline,
-    attMap, (=:<)
+    attMap, attMapM, (=:<),
 ) where
 
 import Prelude hiding (id, (.))
@@ -28,6 +29,7 @@ fromEither :: String -> Either String b -> b
 fromEither message (Left err) = error $ message ++ ": " ++ err
 fromEither _ (Right res) = res
 
+-- rename to dependencies >>> outputs ?
 type Component dependencies outputs = PlainWire (PlainRec dependencies) (PlainRec outputs)
 
 --it's kind of annoying to call this all the time...
@@ -43,9 +45,16 @@ polyInline :: Component ins outs -> Component ins (outs ++ ins)
 polyInline component = component &&&& id
 
 -- | component that maps a function over an attribue
-attMap :: (a -> a) -> Component '[n ::: a] '[n ::: a]
+attMap :: (a -> b) -> Component '[n ::: a] '[m ::: b]
 attMap f = arr mapit
     where mapit (Identity v :& _) = (Identity (f v) :& RNil)
+
+-- | component that maps a monadic function over an attribue
+attMapM :: (a -> IO b) -> Component '[n ::: a] '[m ::: b]
+attMapM f = mkGen_ mapit
+    where mapit (Identity v :& _) = do
+            v' <- f v
+            return (Right (Identity v' :& RNil))
 
 -- | The Angry Chef operator
 (=:<) :: (sy ::: t) -> t -> Component '[] '[sy ::: t]
@@ -54,6 +63,11 @@ f =:< v = pure (f =: v)
 -- | help type deduction for components with no dependencies
 void :: Component '[] '[]
 void = id
+
+-- | hold the first value forever
+-- doesn't really do what I wanted
+keep :: Wire s e m a a
+keep = mkSFN $ \a -> (a, mkConst (Right a))
 
 --define arrow-like functions
 

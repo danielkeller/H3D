@@ -11,6 +11,7 @@ import qualified Data.Vector.Storable as V
 import Data.Vinyl
 import Linear.Applicative hiding (zero)
 import Linear.GL
+import Graphics.GLUtil
 import Linear (zero)
 
 import qualified Math.Mesh as M
@@ -29,11 +30,12 @@ data WfLine = V (PlainRec '[Pos]) | VN NormRec | VT TexRec | F M.TriInd
 loadWavefront :: FilePath -> IO Object
 loadWavefront file = do
     recs <- fromEither file . parseOnly parseObj <$> B.readFile file
+    shdr <- simpleShaderProgram "assets/simple.vert" "assets/simple.frag"
     let vs = [r | V r <- recs]
         vns = [r | VN r <- recs] ++ repeat (Field =: zero)
         vts = [r | VT r <- recs] ++ repeat (Field =: zero)
         verts = zipWith (<+>) (zipWith (<+>) vs vns) vts
-    makeObject (V.fromList verts) (V.fromList [f | F f <- recs]) Triangles
+    makeObject (V.fromList verts) (V.fromList [f | F f <- recs]) shdr
 
 parseObj :: Parser [WfLine]
 parseObj =  many ((V <$> parseVert) <|> (F <$> parseFace) <|> (VN <$> parseNorm) <|> (VT <$> parseTex)

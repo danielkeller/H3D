@@ -5,7 +5,7 @@ module Math.BVH (
 
 import Data.List(maximumBy)
 import Linear.GL
-import Linear
+import Linear hiding (trace)
 import Control.Lens.Getter ((^.))
 import Control.Lens.Setter (set)
 
@@ -29,20 +29,20 @@ longestAxis (Box a b) = maximumBy longer [ex, ey, ez]
     where longer (E ax) (E ax') = compare (b^.ax - a^.ax) (b^.ax' - a^.ax')
 
 buildBVH :: M.Mesh -> AABB
-buildBVH m = buildBVH' m (bound m)
+buildBVH m = buildBVH' m (bound m) 0
 
-buildBVH' :: M.Mesh -> Box -> AABB
-buildBVH' mesh box@(Box a b)
+buildBVH' :: M.Mesh -> Box -> Int -> AABB
+buildBVH' mesh box@(Box a b) depth
     --base case
-    | M.length mesh <= 6 = Leaf box mesh
-    | otherwise = Node box (buildBVH' leftMesh left') (buildBVH' rightMesh right')
+    | M.length mesh <= 6 || depth > 6 = Leaf box mesh
+    | otherwise = Node box (buildBVH' leftMesh left' (depth + 1)) (buildBVH' rightMesh right' (depth + 1))
         where --split on mean centroid of longest axis
               E splitAx = longestAxis box
               splitter = set splitAx (meanCentroid mesh ^. splitAx)
               --replace the component with that of the split point
               left = Box a (splitter b)
               right = Box (splitter a) b
-              --get the relevant meshes (warning, might loop on degernate meshes)
+              --get the relevant meshes
               leftMesh = M.filter (intersects left) mesh
               rightMesh = M.filter (intersects right) mesh
               --chop out uselss space

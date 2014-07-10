@@ -8,16 +8,18 @@ module Math.Shapes (
     boxIntersect, centroid
 ) where
 
-import Linear
+import Linear hiding (trace)
 import Linear.GL
 import Control.Lens.Getter ((^.))
 
 -- | Pattern match convention: (Tri q r s)
 data Tri = Tri Vec3 Vec3 Vec3
+    deriving Show
 
 -- | Pattern match convention: (Box a b)
 -- (Box a b) is bounded on the interval [a, b)
 data Box = Box Vec3 Vec3 --i'm pretty sure this is right
+    deriving Show
 
 --TODO: Do we need a line segment type that specifies openness and closedness?
 --TODO: Should axes return self-projections as an optimization?
@@ -64,10 +66,11 @@ instance Collide Tri where
 
 instance Collide Box where
     axes _ = basis --it's axis aligned!
-    project (Box a b) ax@(V3 x y z) = (c `dot` ax, d `dot` ax)
+    project (Box a b) ax@(V3 x y z) = (min l r, max l r)
         --there are 4 possible pairs of point depending on the direction of ax
               --partially apply just x and y to the constructor in c' and d'
         where (c', d') | x*y > 0 = (V3 (a^._x) (a^._y), V3 (b^._x) (b^._y)) --same x and y
                        | otherwise = (V3 (a^._x) (b^._y), V3 (b^._x) (a^._y)) --different x and y
               (c, d)   | x*z > 0 = (c' (a^._z), d' (b^._z)) --same x and z
                        | otherwise = (c' (b^._z), d' (a^._z)) --different x and z
+              (l, r) = (c `dot` ax, d `dot` ax)
