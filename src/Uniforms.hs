@@ -20,6 +20,7 @@ import Graphics.GLUtil
 import GHC.TypeLits (SingI)
 import qualified Data.Map as M
 
+import Components
 import Util
 
 newtype Uniform a = Uniform {unUnif :: a}

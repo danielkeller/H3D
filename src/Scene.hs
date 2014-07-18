@@ -1,14 +1,12 @@
-{-# LANGUAGE DataKinds, TypeOperators, ConstraintKinds, FlexibleContexts, Arrows, GADTs #-}
+{-# LANGUAGE DataKinds, TypeOperators, ConstraintKinds, FlexibleContexts, Arrows #-}
 module Scene (
-    Transform, transform,
-    Draw, draw,
     ModelView, modelView,
-    Camera, camera,
 
-    DrawScene, drawScene,
-    withModelView, sceneRoot
+    withModelView,
+    sceneRoot, child
 ) where
 
+import Prelude hiding (id)
 import Data.Vinyl
 import Linear
 import Linear.GL
@@ -17,22 +15,8 @@ import Data.Traversable (sequenceA)
 
 import Util
 import Uniforms
-
-type Draw = "draw" ::: DrawFun
-draw :: Draw
-draw = Field
-
-type DrawScene = "drawScene" ::: DrawFun
-drawScene :: DrawScene
-drawScene = Field
-
-type Transform = "transform" ::: Mat4
-transform :: Transform
-transform = Field
-
-type Camera = "camera" ::: Mat4
-camera :: Camera
-camera = Field
+import Components
+import Object.Internal
 
 type ModelView = "modelView" ::: Uniform Mat4
 modelView :: ModelView
@@ -42,10 +26,17 @@ modelView = Field
 withModelView :: Component '[Transform, Camera] '[ModelView]
 withModelView = arr $ \object -> modelView =: Uniform (rGet camera object !*! rGet transform object)
 
+-- | collapse an object's type so it can be put in a list and sent to 'sceneRoot'
+child :: (Transform `IElem` atts, Obj `IElem` atts, DrawScene `IElem` atts, HasUniforms atts) => 
+          Component '[Camera] atts ->
+          Component '[Camera] '[Draw]
+child obj = drawObject <<< arr cast <<< polyInline setAllUniforms <<< inline withModelView <<< mergedCamera
+    where mergedCamera = id &&& obj >>> arr (uncurry (<+>)) --get rid of this?
+
 -- | draw all children
 sceneRoot :: [Component '[Camera] '[Draw]]
               -> Component '[Transform, Camera] '[DrawScene]
 sceneRoot cs = arr combine <<< arr (map (rGet draw)) <<< sequenceA cs <<< subScene <<< withModelView
     where combine draws = drawScene =: (\alpha -> sequence_ (draws <*> pure alpha))
           subScene :: Component '[ModelView] '[Camera]
-          subScene = arr (\(Identity (Uniform mv) :& RNil) -> camera =: mv)
+          subScene = arr (\mv -> camera =: unUnif (unSingleton mv))

@@ -1,89 +1,54 @@
-{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts, GADTs #-}
+{-# LANGUAGE DataKinds, TypeOperators, GADTs #-}
 module Util (
     GameSession,
-    PlainWire0,
-    PlainWire,
-    DrawFun,
-    fromEither,
-    Identity(..),
-    Component,
-    void,
-    keep,
-    (>>>>), (<<<<), (&&&&),
-    inline, polyInline,
-    attMap, attMapM, (=:<),
+    PlainWire0, PlainWire,
+    fromEither, fromEitherGeneric,
+
+    DrawFun, Draw, draw,
+    DrawScene, drawScene,
+    Transform, transform,
+    Camera, camera,
+
+    singleton, unSingleton,
 ) where
 
-import Prelude hiding (id, (.))
-import Control.Wire hiding ((<+>), Identity)
+import Control.Wire (Timed, Wire)
 import Data.Vinyl
-import Data.Vinyl.Idiom.Identity(Identity(..))
+import Data.Vinyl.Idiom.Identity (Identity(..))
+import Linear.GL
 
 type GameSession = Timed Float ()
-type PlainWire0 b = Wire GameSession () IO () b
-type PlainWire a b = Wire GameSession () IO a b
-
-type DrawFun = Float -> IO ()
+type PlainWire0 m b = Wire GameSession () m () b
+type PlainWire m a b = Wire GameSession () m a b
 
 fromEither :: String -> Either String b -> b
 fromEither message (Left err) = error $ message ++ ": " ++ err
 fromEither _ (Right res) = res
 
--- rename to dependencies >>> outputs ?
-type Component dependencies outputs = PlainWire (PlainRec dependencies) (PlainRec outputs)
+fromEitherGeneric :: String -> Either a b -> b
+fromEitherGeneric message (Left _) = error message
+fromEitherGeneric _ (Right res) = res
 
---it's kind of annoying to call this all the time...
+type DrawFun = Float -> IO ()
 
--- | Combines components into bigger ones
-inline :: (PlainRec attributes <: PlainRec dependencies) =>
-          Component dependencies outputs -> Component attributes (outputs ++ attributes)
-inline component = (arr cast >>> component) --feed in desired inputs
-                      &&&& id -- pass through everything as well
+type Draw = "draw" ::: DrawFun
+draw :: Draw
+draw = Field
 
--- | like 'inline', but for components that can consume anything (like setAllUniforms)
-polyInline :: Component ins outs -> Component ins (outs ++ ins)
-polyInline component = component &&&& id
+type DrawScene = "drawScene" ::: DrawFun
+drawScene :: DrawScene
+drawScene = Field
 
--- | component that maps a function over an attribue
-attMap :: (a -> b) -> Component '[n ::: a] '[m ::: b]
-attMap f = arr mapit
-    where mapit (Identity v :& _) = (Identity (f v) :& RNil)
+type Transform = "transform" ::: Mat4
+transform :: Transform
+transform = Field
 
--- | component that maps a monadic function over an attribue
-attMapM :: (a -> IO b) -> Component '[n ::: a] '[m ::: b]
-attMapM f = mkGen_ mapit
-    where mapit (Identity v :& _) = do
-            v' <- f v
-            return (Right (Identity v' :& RNil))
+type Camera = "camera" ::: Mat4
+camera :: Camera
+camera = Field
 
--- | The Angry Chef operator
-(=:<) :: (sy ::: t) -> t -> Component '[] '[sy ::: t]
-f =:< v = pure (f =: v)
+singleton :: a -> PlainRec '[sy ::: a]
+singleton = (Field =:)
 
--- | help type deduction for components with no dependencies
-void :: Component '[] '[]
-void = id
-
--- | hold the first value forever
--- doesn't really do what I wanted
-keep :: Wire s e m a a
-keep = mkSFN $ \a -> (a, mkConst (Right a))
-
---define arrow-like functions
-
-(&&&&) :: Component as bs -> Component as bs' -> Component as (bs ++ bs')
-l &&&& r = l &&& r >>> arr (uncurry (<+>))
-
-infixr 3 &&&&
-
-(>>>>) :: (PlainRec outs <: PlainRec ins') =>
-    Component ins outs -> Component ins' outs' -> Component ins (outs' ++ outs)
-l >>>> r = l >>> inline r
-
-infixr 1 >>>>
-
-(<<<<) :: (PlainRec outs <: PlainRec ins') =>
-    Component ins' outs' -> Component ins outs -> Component ins (outs' ++ outs)
-(<<<<) = flip (>>>>)
-
-infixr 1 <<<<
+unSingleton :: PlainRec '[sy ::: a] -> a
+unSingleton (Identity a :& _) = a

@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings, DataKinds, TypeOperators #-}
 module Wavefront (
-    loadWavefront,
+    wavefrontObject,
+    loadWavefront --remove
 ) where
 
 import GHC.Float (double2Float)
@@ -15,8 +16,11 @@ import Graphics.GLUtil
 import Linear (zero)
 
 import qualified Math.Mesh as M
-import Object
+import Object.Internal
 import Util
+import Components
+import Loader
+import Shader
 
 -- the types of information that .obj files support
 type NormRec = PlainRec '["normal" ::: Vec3]
@@ -27,10 +31,15 @@ data WfLine = V (PlainRec '[Pos]) | VN NormRec | VT TexRec | F M.TriInd
             -- | MtlLib String | UseMtl String
             | Junk
 
-loadWavefront :: FilePath -> IO Object
-loadWavefront file = do
+wavefrontObject :: FilePath -> Component '[Shader] '[Obj]
+wavefrontObject object = resource1 descriptor
+    where descriptor = Resource {resName = object,
+                                 resLoad = loadWavefront object,
+                                 resUnload = freeObject}
+
+loadWavefront :: FilePath -> ShaderProgram -> IO Object
+loadWavefront file shdr = do
     recs <- fromEither file . parseOnly parseObj <$> B.readFile file
-    shdr <- simpleShaderProgram "assets/simple.vert" "assets/simple.frag"
     let vs = [r | V r <- recs]
         vns = [r | VN r <- recs] ++ repeat (Field =: zero)
         vts = [r | VT r <- recs] ++ repeat (Field =: zero)

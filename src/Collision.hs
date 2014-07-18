@@ -3,9 +3,9 @@ module Collision (
     BVH, bvh,
     withBVH,
     drawBVHOf,
-    buildBVH, bvhWireframe --remove
 ) where
 
+import Prelude hiding (id)
 import Data.Vinyl
 import Math.BVH
 import Control.Wire hiding ((.), (<+>))
@@ -13,13 +13,13 @@ import qualified Data.Vector.Storable as V
 
 import Linear
 import Linear.GL
-import Object
-import Util
+import Object.Internal
+import Components
 import Math.Shapes
-import Graphics.GLUtil
-
---for drawing stuff
+import Shader
 import Scene
+import Util
+import Loader
 
 type BVH = "BVH" ::: AABB
 bvh :: BVH
@@ -52,9 +52,9 @@ drawBVHOf :: Component '[Camera] '[Transform, BVH, DrawScene] -> Component '[Cam
 drawBVHOf obj = child $ bvhObject <<<< obj
 
 -- convert a BVH to an object to draw it
--- TODO: Don't do this every time, use lifetimes / whatever
+
 bvhObject :: Component '[BVH] '[Obj]
-bvhObject = keep <<< attMapM helper
-    where helper aabb = 
-              simpleShaderProgram "assets/color.vert" "assets/color.frag"
-              >>= makeWireframe (bvhWireframe aabb)
+bvhObject = resourceN descriptor <<< shader "assets/color" <<<< id
+    where descriptor = Resource {resName = "FIXME",
+                                 resLoad = \deps -> makeWireframe (bvhWireframe (rGet bvh deps)) (rGet shaderRec deps),
+                                 resUnload = freeObject}
