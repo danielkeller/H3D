@@ -9,8 +9,6 @@ module Components (
 ) where
 
 import Prelude hiding (id, (.))
-import Control.Wire hiding ((<+>), Identity)
-import Data.Vinyl
 
 import Util
 import Loader

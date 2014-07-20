@@ -10,9 +10,20 @@ module Util (
     Camera, camera,
 
     singleton, unSingleton,
+
+    module Control.Wire,
+    module Control.Wire.Core,
+    module Control.Applicative,
+    module Control.Arrow,
+    module Control.Category,
+    module Data.Vinyl,
 ) where
 
 import Control.Wire (Timed, Wire)
+import Control.Wire.Core
+import Control.Applicative
+import Control.Arrow hiding ((<+>))
+import Control.Category
 import Data.Vinyl
 import Data.Vinyl.Idiom.Identity (Identity(..))
 import Linear.GL

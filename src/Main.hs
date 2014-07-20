@@ -8,8 +8,7 @@ import Prelude hiding ((.), id)
 import qualified Graphics.UI.GLFW as GLFW
 import Linear.Applicative(perspective, rotation)
 import Linear
-import Data.Vinyl
-import Control.Wire hiding ((<+>), Identity)
+import Control.Wire (timeF)
 
 import Components
 import Window
@@ -39,8 +38,9 @@ scene wnd = arr cast <<< sceneRoot [child object1, obj1Bvh] <<<<
       --this is the least grungy, but grungy nonetheless
       simpleObject = withBVH <<<< wavefrontObject "assets/capsule.obj" <<<< textureFile "assets/capsule.png"
                       <<<< shader "assets/simple" <<<< id
-      obj1Bvh = drawBVHOf (arr cast <<< object1)
-      object1 = sceneRoot [child object2] <<<< spinaround <<<< simpleObject
+      obj1Bvh = drawBVHOf "object1" (arr cast <<< object1)
+      obj2Bvh = drawBVHOf "object2" (arr cast <<< object2)
+      object1 = sceneRoot [child object2, obj2Bvh] <<<< spinaround <<<< simpleObject
       object2 = sceneRoot [] <<<< spinaround2 <<<< simpleObject
       spinaround = arr move'n'scale <<< rotation (timeF / 2) <<< void
       spinaround2 = arr move'n'scale2 <<< flip mkTransformation 0 <$> axisAngle (V3 1 0 0) <$> 2 * timeF <<< void

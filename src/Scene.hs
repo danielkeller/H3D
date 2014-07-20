@@ -1,4 +1,4 @@
-{-# LANGUAGE DataKinds, TypeOperators, ConstraintKinds, FlexibleContexts, Arrows #-}
+{-# LANGUAGE DataKinds, TypeOperators, FlexibleContexts #-}
 module Scene (
     ModelView, modelView,
 
@@ -7,16 +7,14 @@ module Scene (
 ) where
 
 import Prelude hiding (id)
-import Data.Vinyl
 import Linear
 import Linear.GL
-import Control.Wire hiding ((<+>), (.), Identity)
 import Data.Traversable (sequenceA)
 
 import Util
 import Uniforms
 import Components
-import Object.Internal
+import Object
 
 type ModelView = "modelView" ::: Uniform Mat4
 modelView :: ModelView
@@ -32,6 +30,9 @@ child :: (Transform `IElem` atts, Obj `IElem` atts, DrawScene `IElem` atts, HasU
           Component '[Camera] '[Draw]
 child obj = drawObject <<< arr cast <<< polyInline setAllUniforms <<< inline withModelView <<< mergedCamera
     where mergedCamera = id &&& obj >>> arr (uncurry (<+>)) --get rid of this?
+
+-- I think sceneRoot needs to be separate from drawing (ie, entirely its own thing)
+-- so we can make collision a thing
 
 -- | draw all children
 sceneRoot :: [Component '[Camera] '[Draw]]

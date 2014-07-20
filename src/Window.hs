@@ -9,10 +9,8 @@ import Graphics.UI.GLFW as GLFW
 import Control.Exception
 import Control.Monad
 import Control.Monad.Trans.Class(lift)
-import Control.Arrow
-import Control.Wire(mkGen_, Timed(..), stepWire)
+import Control.Wire(Timed(..))
 import Data.Time
-import Data.Vinyl
 
 import Util
 import Components

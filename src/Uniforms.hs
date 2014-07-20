@@ -11,15 +11,11 @@ module Uniforms (
 
 import Prelude hiding (id, (.))
 
-import qualified Graphics.Rendering.OpenGL as GL
-import Graphics.Rendering.OpenGL (($=))
-import Data.Vinyl
 import Data.Vinyl.Idiom.Identity
-import Control.Wire hiding ((<+>), Identity)
-import Graphics.GLUtil
 import GHC.TypeLits (SingI)
 import qualified Data.Map as M
 
+import Graphics
 import Components
 import Util
 
@@ -30,11 +26,11 @@ unifSetter :: UnifSetter
 unifSetter = Field
 
 setAllUniforms :: HasUniforms r => Component r '[UnifSetter]
-setAllUniforms = arr ((unifSetter =:) . (.uniforms) --convert the ShaderProgram to a UnifMap
-                      . uncurry setUniforms) --just the first two arguments
-               . (id &&& delay undefined)
+setAllUniforms = arr help . (id &&& delay undefined)
+    where help (curr, prev) = unifSetter =: help'
+              where help' prgm = setUniforms curr prev (uniforms prgm)
 
-type UnifMap = M.Map String (GL.UniformLocation, GL.VariableType)
+type UnifMap = M.Map String (UniformLocation, VariableType)
 
 {-
   The texuring setup is kind of a hack. We set the first active texutre in the base case,
@@ -48,11 +44,11 @@ class HasUniforms r where
                 -> DrawFun
 
 instance HasUniforms '[] where
-    setUniforms _ _ unifs _ | M.null unifs = GL.activeTexture $= GL.TextureUnit 0
+    setUniforms _ _ unifs _ | M.null unifs = activeTexture $= TextureUnit 0
                             | otherwise = error $ "Uniforms " ++ show (M.keys unifs) ++ " not set"
 
 
-unifLoc :: String -> UnifMap -> GL.VariableType -> GL.UniformLocation
+unifLoc :: String -> UnifMap -> VariableType -> UniformLocation
 unifLoc name unifs realTy = case M.lookup name unifs of
       Nothing -> error $ "Uniform '" ++ name ++ "' not used in shader program "
       Just (loc, ty) | ty == realTy -> loc
@@ -74,13 +70,13 @@ instance (SingI sy, HasUniforms rest, AsUniform sort, Fractional sort, HasVariab
 
 --case for textures
 instance (SingI sy, HasUniforms rest)
-          => HasUniforms (sy ::: GL.TextureObject ': rest) where
+          => HasUniforms (sy ::: TextureObject ': rest) where
     setUniforms (Identity tex :& rest) (_ :& rest') unifs alpha = do
             setUniforms rest rest' (M.delete name unifs) alpha
-            GL.textureBinding GL.Texture2D $= Just tex
-            tu@(GL.TextureUnit n) <- GL.get GL.activeTexture
-            GL.uniform (unifLoc name unifs GL.Sampler2D) $= tu
-            GL.activeTexture $= GL.TextureUnit (n + 1)
+            textureBinding Texture2D $= Just tex
+            tu@(TextureUnit n) <- get activeTexture
+            uniform (unifLoc name unifs Sampler2D) $= tu
+            activeTexture $= TextureUnit (n + 1)
         where name = show (Field :: sy ::: ())
 
 instance HasUniforms rest => HasUniforms (thing ': rest) where

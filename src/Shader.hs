@@ -1,26 +1,25 @@
 {-# LANGUAGE DataKinds, TypeOperators, DeriveDataTypeable, StandaloneDeriving #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Shader (
+    GL.ShaderProgram,
     Shader, shaderRec,
     shader
 ) where
 
-import Graphics.Rendering.OpenGL.GL.ObjectName (deleteObjectName)
-import Graphics.GLUtil.ShaderProgram
 import Data.Vinyl
-import Data.Typeable
 
+import qualified Graphics as GL
 import Loader
 import Components
 
-deriving instance Typeable ShaderProgram
+deriving instance Typeable GL.ShaderProgram
 
-type Shader = "shader" ::: ShaderProgram 
+type Shader = "shader" ::: GL.ShaderProgram 
 shaderRec :: Shader
 shaderRec = Field
 
 shader :: FilePath -> Component '[] '[Shader]
 shader path = resource descriptor
     where descriptor = Resource {resName = path,
-                                 resLoad = const $ simpleShaderProgram (path ++ ".vert") (path ++ ".frag"),
-                                 resUnload = deleteObjectName . program}
+                                 resLoad = const $ GL.simpleShaderProgram (path ++ ".vert") (path ++ ".frag"),
+                                 resUnload = GL.deleteObjectName . GL.program}

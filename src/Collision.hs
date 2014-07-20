@@ -5,15 +5,13 @@ module Collision (
     drawBVHOf,
 ) where
 
-import Prelude hiding (id)
-import Data.Vinyl
+import Prelude hiding (id, (.))
 import Math.BVH
-import Control.Wire hiding ((.), (<+>))
 import qualified Data.Vector.Storable as V
 
 import Linear
 import Linear.GL
-import Object.Internal
+import Object
 import Components
 import Math.Shapes
 import Shader
@@ -25,8 +23,9 @@ type BVH = "BVH" ::: AABB
 bvh :: BVH
 bvh = Field
 
+--todo: recalculate this less
 withBVH :: Component '[Obj] '[BVH]
-withBVH = attMap (buildBVH . objMesh)
+withBVH = keep <<< attMap (buildBVH . objMesh)
 
 -- | visualize the AABB
 bvhWireframe :: AABB -> V.Vector (PlainRec '[Pos, "color" ::: Vec3])
@@ -48,13 +47,13 @@ rainbow :: CFloat -> CFloat -> Vec3
 rainbow pos end = V3 (sine 0) (sine 2) (sine 4)
     where sine phase = sin (2 * pi * pos / end + phase) / 2 + 0.5
 
-drawBVHOf :: Component '[Camera] '[Transform, BVH, DrawScene] -> Component '[Camera] '[Draw]
-drawBVHOf obj = child $ bvhObject <<<< obj
+drawBVHOf :: String -> Component '[Camera] '[Transform, BVH, DrawScene] -> Component '[Camera] '[Draw]
+drawBVHOf name obj = child $ bvhObject name <<<< obj
 
 -- convert a BVH to an object to draw it
 
-bvhObject :: Component '[BVH] '[Obj]
-bvhObject = resourceN descriptor <<< shader "assets/color" <<<< id
-    where descriptor = Resource {resName = "FIXME",
+bvhObject :: String -> Component '[BVH] '[Obj]
+bvhObject name = resourceN descriptor <<< shader "assets/color" <<<< id
+    where descriptor = Resource {resName = name,
                                  resLoad = \deps -> makeWireframe (bvhWireframe (rGet bvh deps)) (rGet shaderRec deps),
                                  resUnload = freeObject}

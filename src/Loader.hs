@@ -2,17 +2,17 @@
 module Loader (
     Loader, evalLoader,
     Resource(..), resource, resource1, resourceN,
+
+    module Data.Typeable
 ) where
 
 import qualified Data.Map as M
-import Data.Vinyl
-import Control.Wire hiding ((.), hold)
-import Data.Typeable
+import Data.Typeable hiding (cast)
 import Data.Dynamic
 import Control.Monad.Trans.State -- strict?
 import Control.Monad.Trans.Class
 
-import Util
+import Util hiding ((.))
 
 evalLoader :: Loader a -> IO a
 evalLoader ldr = evalStateT ldr M.empty
